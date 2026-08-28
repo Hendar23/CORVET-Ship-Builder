@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>CORVET Ship Builder</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+
+    body {
+      font-family: 'Space Mono', monospace;
+      background: #232220;
+      color: white;
+      display: flex;
+      margin: 0;
+      min-height: 100vh;
+    }
+    #sidebar {
+      width: 280px;
+      padding: 20px;
+      background: #171615;
+      border-right: 2px solid #3a3835;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      z-index: 50;
+      overflow-y: auto;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      box-sizing: border-box;
+      flex-shrink: 0;
+    }
+    #right-sidebar {
+      width: 280px;
+      padding: 20px;
+      background: #171615;
+      border-left: 2px solid #3a3835;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      z-index: 50;
+      overflow-y: auto;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      box-sizing: border-box;
+      flex-shrink: 0;
+    }
+    button, select, input[type="text"] {
+      font-family: inherit; 
+      padding: 8px;
+      background: #2a2826;
+      color: #e0dcd3;
+      border: 1px solid #4a4742;
+      cursor: pointer;
+      box-sizing: border-box;
+      border-radius: 0px; 
+    }
+    button:hover { background: #3a3733; }
+    
+    .tool-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .btn-tool {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px;
+      background: #2a2826;
+      border: 1px solid #4a4742;
+      color: #e0dcd3;
+      transition: background 0.2s;
+    }
+    .btn-tool:hover { background: #4a4742; }
+    .btn-danger:hover { background: #5c2c2c; border-color: #c05c3d; color: #f5d3c9;}
+    .active-mode { background: #4a7c82 !important; color: #ffffff !important; border-color: #1a1a1a !important; }
+    
+    #workspace {
+      position: relative;
+      width: 210mm; 
+      height: 297mm;
+      background-color: #f0ebe1; 
+      background-image: 
+        linear-gradient(#dbd6cc 1px, transparent 1px),
+        linear-gradient(90deg, #dbd6cc 1px, transparent 1px);
+      background-size: 10px 10px; 
+      margin: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      overflow: visible;
+      isolation: isolate; 
+    }
+
+    .target-number {
+      position: absolute; bottom: 44px; right: 5px;
+      width: 24px; height: 24px;
+      background: #ffffff; color: #1a1a1a;
+      border: 2px solid #1a1a1a; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: bold; 
+      isolation: isolate; 
+      z-index: 5;
+    }
+
+    .target-number::before, .target-number::after {
+      content: ''; position: absolute; z-index: -1;
+      background: transparent; box-sizing: border-box;
+    }
+    .target-number::before { width: 36px; height: 2px; top: 11px; left: -6px; border-left: 6px solid #1a1a1a; border-right: 6px solid #1a1a1a; }
+    .target-number::after { width: 2px; height: 36px; top: -6px; left: 11px; border-top: 6px solid #1a1a1a; border-bottom: 6px solid #1a1a1a; }
+    .room {
+      position: absolute;
+      cursor: grab;
+      user-select: none;
+      background: #ffffff;
+      border: 3px solid #1a1a1a;
+      box-sizing: border-box; 
+      color: #1a1a1a;
+      box-shadow: 4px 4px 0px #c05c3d;
+      transition: box-shadow 0.1s;
+    }
+    .room.dragging { 
+      cursor: grabbing; 
+      z-index: 100; 
+      box-shadow: 6px 6px 0px #c05c3d;
+    }
+    
+    .room-inner { width: 100%; height: 100%; position: relative; }
+    
+    .hp-box {
+      position: absolute; top: 10px; left: 10px; width: 35px; height: 35px;
+      background: #1a1a1a; color: #ffffff; 
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: bold;
+      clip-path: polygon(0 0, 100% 0, 100% 75%, 75% 100%, 0 100%); 
+    }
+    
+    .ammo-box {
+      position: absolute; top: 10px; right: 10px; width: 35px; height: 35px;
+      border: 2px solid #1a1a1a; display: flex; align-items: center; justify-content: center;
+      font-size: 16px; font-weight: bold;
+      border-bottom: 5px solid #4a7c82; 
+    }
+    
+    .manned-circle {
+      position: absolute; top: 60px; left: 10px; width: 40px; height: 40px;
+      border: 2px dashed #1a1a1a; border-radius: 50%; 
+    }
+
+    .arc-circle {
+      position: absolute; top: 10px; right: 10px; width: 35px; height: 35px;
+      border-radius: 50%; cursor: pointer; transition: transform 0.2s ease-in-out;
+    }
+    .arc-circle svg { width: 100%; height: 100%; display: block; }
+    
+    .room-name {
+      position: absolute; bottom: 0; width: 100%; height: 36px;
+      display: flex; align-items: center; justify-content: center; box-sizing: border-box;
+      background: #1a1a1a; color: #ffffff; padding: 2px 4px; text-align: center;
+      font-weight: bold; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; line-height: 1.1;
+    }
+
+    .btn-delete-room {
+      position: absolute; bottom: 25px; left: 5px;
+      background: #c05c3d; color: white; border: 2px solid #1a1a1a;
+      width: 22px; height: 22px; padding: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; font-weight: bold; cursor: pointer; line-height: 1;
+      transition: background 0.1s;
+    }
+    .btn-delete-room:hover { background: #e07253; }
+
+/* --- Procedural Doors --- */
+    .door {
+      position: absolute;
+      background: #ffffff;
+      border: 2px solid #1a1a1a;
+      box-sizing: border-box;
+      z-index: 3000; /* Ensures the door sits on top of dynamic rooms */
+      pointer-events: none;
+    }
+    .door-h { width: 48px; height: 16px; margin-left: -24px; margin-top: -8px; }
+    .door-v { width: 16px; height: 48px; margin-left: -8px; margin-top: -24px; }
+
+    /* --- Ship Board UI Elements --- */
+    .board-ui { position: absolute; cursor: grab; user-select: none; box-sizing: border-box; color: #1a1a1a; display: flex; align-items: center; justify-content: center; font-weight: bold; }
+    .board-ui.dragging { z-index: 100; cursor: grabbing; }
+    .ui-label { position: absolute; bottom: -25px; font-size: 14px; font-weight: bold; text-transform: uppercase; white-space: nowrap; letter-spacing: 1px;}
+    
+    .hull-ui { width: 60px; height: 60px; border: 4px solid #1a1a1a; background: #ffffff; font-size: 24px; box-shadow: 4px 4px 0px #4a7c82; transition: box-shadow 0.1s; }
+    .hull-ui.dragging { box-shadow: 6px 6px 0px #4a7c82; }
+
+    .shield-ui { width: 80px; height: 70px; background: transparent; }
+    .shield-svg { position: absolute; width: 100%; height: 100%; z-index: 0; top: 0; left: 0; filter: drop-shadow(4px 4px 0px #4a7c82); transition: filter 0.1s; }
+    .shield-ui.dragging .shield-svg { filter: drop-shadow(6px 6px 0px #4a7c82); }
+    .shield-svg polygon { fill: #ffffff; stroke: #1a1a1a; stroke-width: 4; stroke-linejoin: bevel;}
+    .shield-ui span { font-size: 24px; position: relative; z-index: 1; }
+    
+    .power-pool-ui { width: 250px; height: 120px; border: 3px solid #1a1a1a; background: #ffffff; font-size: 18px; border-radius: 20px; background-image: repeating-linear-gradient(45deg, #f0ebe1 0, #f0ebe1 2px, transparent 2px, transparent 8px); box-shadow: 4px 4px 0px #c05c3d; transition: box-shadow 0.1s; }
+    .power-pool-ui.dragging { box-shadow: 6px 6px 0px #c05c3d; }
+
+    .speed-track-ui { width: 50px; background: #ffffff; border: 3px solid #1a1a1a; flex-direction: column; box-shadow: 4px 4px 0px #1a1a1a; transition: box-shadow 0.1s; }
+    .speed-track-ui.dragging { box-shadow: 6px 6px 0px #1a1a1a; }
+
+    .speed-box { width: 100%; height: 40px; border-bottom: 2px solid #1a1a1a; display: flex; align-items: center; justify-content: center; }
+    .speed-box:last-child { border-bottom: none; }
+    
+    .ship-header-ui { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+    .ship-name-text { font-size: 28px; font-weight: bold; white-space: nowrap; text-transform: uppercase; letter-spacing: -1px; }
+    .ship-class-text { font-size: 14px; font-weight: bold; white-space: nowrap; text-transform: uppercase; letter-spacing: 2px; color: #4a7c82; }
+
+    .portrait-ui { width: 180px; height: 180px; border: 3px dashed #1a1a1a; background: transparent; display: flex; align-items: center; justify-content: center; flex-direction: column; overflow: hidden; }
+    .portrait-ui img { width: 100%; height: 100%; object-fit: cover; display: none; pointer-events: none; }
+    .portrait-ui.has-image { border-style: solid; background: #ffffff; box-shadow: 4px 4px 0px #1a1a1a; }
+    .portrait-ui.has-image img { display: block; }
+    .portrait-ui.has-image .portrait-placeholder { display: none; }
+    .portrait-placeholder { color: #1a1a1a; font-size: 12px; text-transform: uppercase; font-weight: bold; text-align: center; pointer-events: none; opacity: 0.6; }
+
+    .points-ui { font-size: 28px; font-weight: bold; color: #1a1a1a; background: transparent; border: none; padding: 0; box-shadow: none; letter-spacing: -1px; white-space: nowrap; text-transform: uppercase; }
+    .target-die-ui { font-size: 20px; font-weight: bold; color: #1a1a1a; background: transparent; border: none; padding: 0; box-shadow: none; letter-spacing: -1px; white-space: nowrap; text-transform: uppercase; }
+    /* --- Printer Friendly Override --- */
+    body.printer-friendly .target-number { background: #ffffff !important; color: #000000 !important; border-color: #000000 !important; }
+    body.printer-friendly .target-number::before, body.printer-friendly .target-number::after { border-color: #000000 !important; }    body.printer-friendly #workspace { background-color: #ffffff !important; background-image: none !important; box-shadow: none !important; }
+    body.printer-friendly .room, body.printer-friendly .hull-ui, body.printer-friendly .power-pool-ui, body.printer-friendly .speed-track-ui { border-color: #000000 !important; background-color: #ffffff !important; box-shadow: none !important; }
+    body.printer-friendly .power-pool-ui { background-image: none !important; }    
+    body.printer-friendly .hp-box { background: #000000 !important; color: #000000 !important; border: none !important; z-index: 1; }
+    body.printer-friendly .hp-box::before { content: ''; position: absolute; top: 2px; left: 2px; right: 2px; bottom: 2px; background: #ffffff !important; clip-path: polygon(0 0, 100% 0, 100% 72%, 72% 100%, 0 100%); z-index: -1; }
+    body.printer-friendly .ammo-box { border-bottom: 2px solid #000000 !important; }
+    body.printer-friendly .room-name { background: #ffffff !important; color: #000000 !important; border-top: 2px solid #000000 !important; }
+    body.printer-friendly .ship-class-text { color: #000000 !important; }
+    body.printer-friendly .door { background: #ffffff !important; border-color: #000000 !important; }
+    body.printer-friendly .shield-svg { filter: none !important; }
+    body.printer-friendly .portrait-ui { box-shadow: none !important; border-color: #000000 !important; }
+    body.printer-friendly .portrait-ui:not(.has-image) { display: none !important; }
+    /* --- Modal Styling --- */
+    #modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; z-index: 1000; }
+    #modal-content { background: #f0ebe1; color: #1a1a1a; width: 500px; max-height: 80vh; border: 3px solid #1a1a1a; display: flex; flex-direction: column; overflow: hidden; box-shadow: 8px 8px 0px #c05c3d;}
+    .modal-header { padding: 15px; border-bottom: 3px solid #1a1a1a; font-weight: bold; font-size: 20px; display: flex; justify-content: space-between; background: #1a1a1a; color: white;}
+    .modal-body { padding: 15px; overflow-y: auto; flex-grow: 1; }
+    .modal-footer { padding: 15px; border-top: 3px solid #1a1a1a; text-align: right; background: #dbd6cc;}
+    .library-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border: 2px solid #1a1a1a; margin-bottom: 10px; background: #ffffff;}
+    .library-item-actions button { padding: 6px 12px; font-size: 12px; margin-left: 5px; font-weight: bold; text-transform: uppercase;}
+    .btn-load { background: #4a7c82; color: white; border: 2px solid #1a1a1a; }
+    .btn-delete { background: #c05c3d; color: white; border: 2px solid #1a1a1a; }
+
+    /* Print Output Control */
+    @media print {
+      @page { size: A4 portrait; margin: 0 !important; }
+      /* Forces the browser to print the background grid and colors globally */
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+      html, body { width: 210mm; height: 297mm; margin: 0 !important; padding: 0 !important; display: block; overflow: hidden; }
+      #sidebar, #right-sidebar, #modal-overlay { display: none !important; }
+      #workspace { margin: 0 !important; padding: 0 !important; width: 210mm; height: 297mm; position: absolute; top: 0; left: 0; border: none; box-shadow: none !important;}
+      .btn-delete-room { display: none !important; } 
+      .portrait-ui:not(.has-image) { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="sidebar">
+    <h2 style="margin-top: 0; letter-spacing: -1px; text-transform: uppercase; border-bottom: 2px solid #4a4742; padding-bottom: 10px;">CORVET<br>Ship Builder</h2>
+    
+    <div>
+      <label style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Ship Name:</label>
+      <input type="text" id="ship-name-input" value="NEW SHIP" style="width: 100%; margin-top: 5px;">
+    </div>
+
+    <div>
+      <label style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Ship Class:</label>
+      <input type="text" id="ship-class-input" value="ASSAULT CORVETTE" style="width: 100%; margin-top: 5px;">
+    </div>
+
+    <div>
+      <label for="room-select" style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Select Room:</label>
+      <select id="room-select" style="width: 100%; margin-top: 5px;"></select>
+    </div>
+    <button id="btn-add" style="font-weight: bold; text-transform: uppercase;">Add Room</button>
+    
+    <h3 id="points-total" style="margin: 5px 0; color: #c05c3d;">Total Points: 0</h3>
+    <div id="warnings-container" style="color: #ff4444; font-size: 0.85em; font-weight: bold; line-height: 1.4; margin-bottom: 5px;"></div>
+
+    <hr style="width: 100%; border-color: #3a3835;">
+    
+    <label style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Library Management:</label>
+    <div class="tool-grid">
+      <button class="btn-tool" id="btn-new" title="New Ship">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"></path></svg>
+      </button>
+      <button class="btn-tool" id="btn-save-lib" title="Save to Library">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+      </button>
+      <button class="btn-tool" id="btn-open-lib" title="Open Library">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+      </button>
+      <button class="btn-tool" id="btn-export" title="Export Library">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+      </button>
+      <button class="btn-tool" id="btn-import" title="Import Library (Overwrite)">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+      </button>
+      <button class="btn-tool" id="btn-merge" title="Merge Library (Add)">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"></circle><circle cx="6" cy="6" r="3"></circle><path d="M6 21V9a9 9 0 0 0 9 9"></path></svg>
+      </button>
+      <button class="btn-tool btn-danger" id="btn-wipe" title="Wipe Database">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M3 5v14c0 1.66 4 3 9 3"></path><path d="M21 5v4"></path><line x1="15" y1="15" x2="21" y2="21"></line><line x1="21" y1="15" x2="15" y2="21"></line></svg>
+      </button>
+    </div>
+
+    <!-- Hidden File Inputs -->
+    <input type="file" id="file-import" accept=".json" style="display: none;">
+    <input type="file" id="file-merge" accept=".json" style="display: none;">
+    <input type="file" id="file-portrait" accept="image/*" style="display: none;">
+
+    <div style="display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 10px;">
+      <button id="btn-refresh-numbers" style="display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: bold; text-transform: uppercase;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path></svg>
+        Refresh Numbers
+      </button>
+      <button id="btn-group-move" style="display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: bold; text-transform: uppercase;">        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M19 9l3 3-3 3M9 19l3 3 3 3M2 12h20M12 2v20"/></svg>
+        Group Move: OFF
+      </button>
+	<button id="btn-theme" style="display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: bold; text-transform: uppercase;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path></svg>
+        Printer Friendly: OFF
+      </button>      <button id="btn-print" style="display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: bold; text-transform: uppercase;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+        Print
+      </button>
+    </div>
+  </div>
+
+  <div id="workspace"></div>
+
+   <div id="right-sidebar">
+    <h2 style="margin-top: 0; letter-spacing: -1px; text-transform: uppercase; border-bottom: 2px solid #4a4742; padding-bottom: 10px;">Loadout<br>Options</h2>
+    
+    <div>
+      <label style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Hull Profile:</label>
+      <select id="hull-select" style="width: 100%; margin-top: 5px;"></select>
+    </div>
+    
+    <div>
+      <label style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Reactor:</label>
+      <select id="reactor-select" style="width: 100%; margin-top: 5px;"></select>
+    </div>
+    
+    <div>
+      <label style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Engine:</label>
+      <select id="engine-select" style="width: 100%; margin-top: 5px;"></select>
+    </div>
+    
+    <div>
+      <label style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Helm:</label>
+      <select id="helm-select" style="width: 100%; margin-top: 5px;"></select>
+    </div>
+  </div>
+
+  <!-- Library Modal Overlay -->
+  <div id="modal-overlay">
+    <div id="modal-content">
+      <div class="modal-header">
+        <span>Ship Library</span>
+        <span style="cursor:pointer; color:#888;" id="close-modal">&times;</span>
+      </div>
+      <div class="modal-body" id="library-list">
+      </div>
+      <div class="modal-footer">
+        <button id="btn-close-modal" style="color:white; background: #1a1a1a; font-family: inherit; padding: 8px 16px; border: 2px solid transparent; font-weight: bold; cursor: pointer;">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="rooms.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
