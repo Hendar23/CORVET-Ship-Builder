@@ -1,4 +1,4 @@
-# CORVET-Ship-Builder
+# CORVET Ship Builder
 Ship design tool for the tabletop game CORVET
 
 CORVET Ship Builder is the official web-based companion tool for CORVET, a chaotic, fast-paced skirmish tabletop game of starship combat. This application allows players to design custom spaceships and print the ship boards required for tabletop play.
