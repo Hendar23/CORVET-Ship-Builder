@@ -77,7 +77,8 @@ function saveLibraryToLocal() {
 
 function populateDropdown() {
   const select = document.getElementById('room-select');
-  const optionalRooms = roomDatabase.filter(r => r.type !== 'core');
+  const optionalRooms = roomDatabase.filter(r => r.type !== 'core')
+    .sort((a, b) => a.name.localeCompare(b.name));
   
   optionalRooms.forEach(room => {
     const option = document.createElement('option');
@@ -97,7 +98,8 @@ function populateDropdown() {
 
   const populateCore = (categoryId, elementId) => {
     const sel = document.getElementById(elementId);
-    const variants = roomDatabase.filter(r => r.core_category === categoryId);
+    const variants = roomDatabase.filter(r => r.core_category === categoryId)
+      .sort((a, b) => a.name.localeCompare(b.name));
     variants.forEach(room => {
       const option = document.createElement('option');
       option.value = room.id;
