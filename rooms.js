@@ -65,7 +65,7 @@ const roomDatabase = [
         cost: 0,
         width: 70,
         height: 180,
-        max_connections: 3
+        max_connections: 4
     },
     {
         id: "corridor_v_s",
@@ -74,7 +74,7 @@ const roomDatabase = [
         cost: 0,
         width: 70,
         height: 90,
-        max_connections: 3
+        max_connections: 4
     },
     {
         id: "corridor_h",
@@ -83,7 +83,7 @@ const roomDatabase = [
         cost: 0,
         width: 180,
         height: 70,
-        max_connections: 3
+        max_connections: 4
     },
     {
         id: "corridor_h_s",
@@ -92,7 +92,7 @@ const roomDatabase = [
         cost: 0,
         width: 90,
         height: 70,
-        max_connections: 3
+        max_connections: 4
     },
     {
         id: "corridor_curve_ne",
@@ -148,7 +148,7 @@ const roomDatabase = [
         cost: 10,
         width: 130,
         height: 180,
-        max_connections: 2,
+        max_connections: 3,
         max_hp: 4,
         is_mannable: true,
         ammo: 0
@@ -174,7 +174,7 @@ const roomDatabase = [
         cost: 60,
         width: 130,
         height: 180,
-        max_connections: 4,
+        max_connections: 3,
         max_hp: 8,
         is_mannable: true,
         ammo: 0
@@ -250,7 +250,7 @@ const roomDatabase = [
         cost: 15,
         width: 130,
         height: 180,
-        max_connections: 2,
+        max_connections: 3,
         max_hp: 2,
         is_mannable: true,
         ammo: 0
@@ -262,7 +262,7 @@ const roomDatabase = [
         cost: 15,
         width: 130,
         height: 180,
-        max_connections: 2,
+        max_connections: 3,
         max_hp: 2,
         is_mannable: true,
         ammo: 0
@@ -274,7 +274,7 @@ const roomDatabase = [
         cost: 15,
         width: 130,
         height: 180,
-        max_connections: 2,
+        max_connections: 3,
         max_hp: 2,
         is_mannable: false,
         ammo: 0
@@ -286,7 +286,7 @@ const roomDatabase = [
         cost: 20,
         width: 130,
         height: 180,
-        max_connections: 2,
+        max_connections: 3,
         max_hp: 3,
         is_mannable: true,
         ammo: 0
@@ -298,7 +298,7 @@ const roomDatabase = [
         cost: 15,
         width: 130,
         height: 180,
-        max_connections: 2,
+        max_connections: 3,
         max_hp: 2,
         is_mannable: false,
         ammo: 0
@@ -310,7 +310,7 @@ const roomDatabase = [
         cost: 15,
         width: 130,
         height: 180,
-        max_connections: 2,
+        max_connections: 3,
         max_hp: 2,
         is_mannable: true,
         ammo: 0

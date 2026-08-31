@@ -532,13 +532,31 @@ function updateWarnings(rooms, connections) {
     const data = roomDatabase.find(db => db.id === r.dataset.id);
     if (!data) return;
     
+    let hasError = false;
+
     if (data.type === 'corridor') {
       corridorCount++;
-      if (connections[idx] > 4) overConnectedCorridors = true;
-      if (connections[idx] < 2) underConnectedCorridors = true;
+      if (connections[idx] > data.max_connections) {
+        overConnectedCorridors = true;
+        hasError = true;
+      }
+      if (connections[idx] < 2) {
+        underConnectedCorridors = true;
+        hasError = true;
+      }
     } else {
       standardRoomCount++;
-      if (connections[idx] > 3) overConnectedRooms = true;
+      if (connections[idx] > data.max_connections) {
+        overConnectedRooms = true;
+        hasError = true;
+      }
+    }
+    
+    // Toggle the visual warning indicator
+    if (hasError) {
+      r.classList.add('error-highlight');
+    } else {
+      r.classList.remove('error-highlight');
     }
   });
   
@@ -554,10 +572,10 @@ function updateWarnings(rooms, connections) {
     warnings.push(`⚠️ Too many crew (Max ${allowedCrew} allowed for ${standardRoomCount} rooms)`);
   }
   if (overConnectedRooms) {
-    warnings.push("⚠ Room exceeds max connections (3)");
+    warnings.push("⚠ A room exceeds its max permitted connections");
   }
   if (overConnectedCorridors) {
-    warnings.push("⚠ Corridor exceeds max connections (4)");
+    warnings.push("⚠ A corridor exceeds its max permitted connections");
   }
   if (underConnectedCorridors) {
     warnings.push("⚠ Corridors must have at least 2 connections");
@@ -787,11 +805,15 @@ function loadShipToWorkspace(layoutData) {
       createRoom(item.id, parseInt(item.left), parseInt(item.top), item.arcState);
     }
   });
+  
+  // Sync the sidebar dropdowns to the loaded board elements FIRST
+  syncDropdownsToBoard();
+  
+  // Now calculate the points with the correct values
   updatePoints();
   updateDoors();
   updateTargetNumbers();
   updateZIndices();
-  syncDropdownsToBoard();
   renderCrewSidebar();
 }
 

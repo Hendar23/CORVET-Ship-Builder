@@ -126,6 +126,26 @@
       box-shadow: 6px 6px 0px #c05c3d;
     }
 
+    /* --- Error Highlighting --- */
+    @keyframes pulse-error {
+      0% { opacity: 0.4; transform: translate(-50%, -50%) scale(0.9); }
+      50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+      100% { opacity: 0.4; transform: translate(-50%, -50%) scale(0.9); }
+    }
+    .room.error-highlight::after {
+      content: '❌';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      font-size: 50px;
+      z-index: 5000;
+      pointer-events: none;
+      animation: pulse-error 1.5s infinite;
+    }
+    body.printer-friendly .room.error-highlight::after {
+      display: none !important; /* Hides the error icon when printing */
+    }
+
     /* --- Custom Room Shapes --- */
     [data-id="corridor_circle"] {
       /* 130px room: 30px curves leave exactly 70px flat on all sides to connect cleanly */
