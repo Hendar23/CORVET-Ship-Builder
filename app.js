@@ -1,6 +1,7 @@
 const workspace = document.getElementById('workspace');
 
 let shipLibrary = [];
+let shipCrew = [{ name: 'Crewman 1', perk: 'none' }];
 
 function init() {
   populateDropdown();
@@ -45,11 +46,13 @@ function setupDefaultWorkspace() {
   document.getElementById('ship-class-input').value = 'CORVETTE';
   setupBoardElements();
   setupCoreRooms();
+  shipCrew = [{ name: 'Crewman 1', perk: 'none' }];
   updatePoints();
   updateDoors();
   updateTargetNumbers();
   updateZIndices();
   syncDropdownsToBoard();
+  renderCrewSidebar();
 }
 
 function autoSaveWorkspace() {
@@ -118,6 +121,7 @@ function setupBoardElements() {
   createUIElement('shields', 110, 15);
   createUIElement('speed', 700, 400);
   createUIElement('power', 20, 900);
+  createUIElement('crew-manifest', 20, 320);
 }
 
 function createUIElement(type, startX, startY, customText = null, customClassText = null) {
@@ -184,6 +188,10 @@ function createUIElement(type, startX, startY, customText = null, customClassTex
       e.stopPropagation();
       document.getElementById('file-portrait').click();
     });
+  } else if (type === 'crew-manifest') {
+    el.className = 'board-ui crew-manifest-ui';
+    el.id = 'board-crew-manifest';
+    renderCrewOnBoard(el);
   }
 
   workspace.appendChild(el);
@@ -531,8 +539,13 @@ function updateWarnings(rooms, connections) {
   let warnings = [];
   
   const requiredCorridors = Math.floor(standardRoomCount / 3);
+  const allowedCrew = Math.max(1, Math.ceil(standardRoomCount / crewConfig.roomsPerCrew));
+
   if (corridorCount < requiredCorridors) {
-    warnings.push(`⚠ Not enough corridors (Min ${requiredCorridors} required for ${standardRoomCount} rooms)`);
+    warnings.push(`⚠️ Not enough corridors (Min ${requiredCorridors} required for ${standardRoomCount} rooms)`);
+  }
+  if (shipCrew.length > allowedCrew) {
+    warnings.push(`⚠️ Too many crew (Max ${allowedCrew} allowed for ${standardRoomCount} rooms)`);
   }
   if (overConnectedRooms) {
     warnings.push("⚠ Room exceeds max connections (3)");
@@ -561,6 +574,18 @@ function updatePoints() {
   if (hullSelect) {
     const hullData = hullDatabase.find(h => h.id === hullSelect.value);
     if (hullData && hullData.cost) total += hullData.cost;
+  }
+  
+  if (typeof crewConfig !== 'undefined') {
+    total += (shipCrew.length * crewConfig.cost);
+    if (typeof crewPerks !== 'undefined') {
+      shipCrew.forEach(c => {
+        if (c.perk && c.perk !== 'none') {
+          const pData = crewPerks.find(p => p.id === c.perk);
+          if (pData) total += pData.cost;
+        }
+      });
+    }
   }
 
   document.getElementById('points-total').textContent = 'Total Points: ' + total;
@@ -688,7 +713,8 @@ function getCurrentLayoutData() {
       top: el.style.top,
       customText: el.id === 'ship-header' ? document.getElementById('ship-name-display').textContent : 
                   (el.id === 'board-portrait' ? customImg : 
-                  (el.dataset.uiType === 'hull' ? document.getElementById('hull-select').value : null)),
+                  (el.dataset.uiType === 'hull' ? document.getElementById('hull-select').value : 
+                  (el.dataset.uiType === 'crew-manifest' ? JSON.stringify(shipCrew) : null))),
       customClassText: el.id === 'ship-header' ? document.getElementById('ship-class-display').textContent : null,
       arcState: arcState
     });
@@ -698,6 +724,15 @@ function getCurrentLayoutData() {
 
 function loadShipToWorkspace(layoutData) {
   workspace.innerHTML = ''; 
+  
+  const crewData = layoutData.find(item => item.id === 'crew-manifest');
+  if (crewData && crewData.customText) {
+    try { shipCrew = JSON.parse(crewData.customText); } 
+    catch (e) { shipCrew = [{ name: 'Crewman 1', perk: 'none' }]; }
+  } else {
+    shipCrew = [{ name: 'Crewman 1', perk: 'none' }];
+  }
+
   layoutData.forEach(item => {
     if (item.isUI) {
       createUIElement(item.id, parseInt(item.left), parseInt(item.top), item.customText, item.customClassText);
@@ -714,6 +749,7 @@ function loadShipToWorkspace(layoutData) {
   updateTargetNumbers();
   updateZIndices();
   syncDropdownsToBoard();
+  renderCrewSidebar();
 }
 
 document.getElementById('btn-new').addEventListener('click', () => {
@@ -822,6 +858,17 @@ document.getElementById('btn-open-lib').addEventListener('click', () => {
           } else if (item.id === 'hull' && item.customText) {
             const hullData = hullDatabase.find(h => h.id === item.customText);
             if (hullData && hullData.cost) shipPoints += hullData.cost;
+          } else if (item.id === 'crew-manifest' && item.customText) {
+             try {
+               const parsedCrew = JSON.parse(item.customText);
+               shipPoints += (parsedCrew.length * crewConfig.cost);
+               parsedCrew.forEach(c => {
+                 if (c.perk && c.perk !== 'none') {
+                   const pData = crewPerks.find(p => p.id === c.perk);
+                   if (pData) shipPoints += pData.cost;
+                 }
+               });
+             } catch(e) {}
           }
         });
       }
@@ -924,5 +971,102 @@ document.getElementById('hull-select').addEventListener('change', (e) => {
     if (hpBox) hpBox.textContent = hullData.hp;
   }
   updatePoints();
+  autoSaveWorkspace();
+});
+
+// --- CREW ROSTER LOGIC ---
+function renderCrewOnBoard(el = document.getElementById('board-crew-manifest')) {
+  if (!el) return;
+  let listHtml = shipCrew.map(c => {
+    let html = `<div>&bull; ${c.name}</div>`;
+    if (c.perk && c.perk !== 'none') {
+      const perkData = crewPerks.find(p => p.id === c.perk);
+      if (perkData) {
+        html += `<div style="font-size: 11px; font-style: italic; font-weight: normal; padding-left: 14px; margin-top: -2px; text-transform: none;">${perkData.name}</div>`;
+      }
+    }
+    return `<div style="margin-bottom: 4px;">${html}</div>`;
+  }).join('');
+  
+  el.innerHTML = `
+    <div class="crew-header">Crew Manifest</div>
+    <div class="crew-list" style="gap: 2px;">${listHtml}</div>
+  `;
+}
+
+function renderCrewSidebar() {
+  const container = document.getElementById('crew-sidebar-list');
+  if (!container) return;
+  container.innerHTML = '';
+  
+  shipCrew.forEach((crew, index) => {
+    const wrapper = document.createElement('div');
+    wrapper.style.display = 'flex';
+    wrapper.style.flexDirection = 'column';
+    wrapper.style.gap = '5px';
+    wrapper.style.marginBottom = '5px';
+    wrapper.style.paddingBottom = '10px';
+    wrapper.style.borderBottom = '1px dashed #3a3835';
+    
+    const topRow = document.createElement('div');
+    topRow.style.display = 'flex';
+    topRow.style.gap = '5px';
+    
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = crew.name;
+    input.style.flexGrow = '1';
+    input.addEventListener('input', (e) => {
+      shipCrew[index].name = e.target.value;
+      renderCrewOnBoard();
+      autoSaveWorkspace();
+    });
+    
+    const delBtn = document.createElement('button');
+    delBtn.innerHTML = '&times;';
+    delBtn.className = 'btn-danger';
+    delBtn.style.padding = '0 10px';
+    delBtn.style.fontWeight = 'bold';
+    delBtn.title = 'Remove Crew';
+    delBtn.addEventListener('click', () => {
+      shipCrew.splice(index, 1);
+      renderCrewSidebar();
+      renderCrewOnBoard();
+      updatePoints();
+      updateTargetNumbers(); 
+      updateDoors(); 
+      autoSaveWorkspace();
+    });
+    
+    const select = document.createElement('select');
+    select.style.width = '100%';
+    crewPerks.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.name === 'No Perk' ? 'No Perk' : `${p.name} (${p.cost} pts)`;
+      select.appendChild(opt);
+    });
+    select.value = crew.perk || 'none';
+    select.addEventListener('change', (e) => {
+      shipCrew[index].perk = e.target.value;
+      renderCrewOnBoard();
+      updatePoints();
+      autoSaveWorkspace();
+    });
+    
+    topRow.appendChild(input);
+    topRow.appendChild(delBtn);
+    wrapper.appendChild(topRow);
+    wrapper.appendChild(select);
+    container.appendChild(wrapper);
+  });
+}
+
+document.getElementById('btn-add-crew').addEventListener('click', () => {
+  shipCrew.push({ name: `Crewman ${shipCrew.length + 1}`, perk: 'none' });
+  renderCrewSidebar();
+  renderCrewOnBoard();
+  updatePoints();
+  updateDoors(); 
   autoSaveWorkspace();
 });

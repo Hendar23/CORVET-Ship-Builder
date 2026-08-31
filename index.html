@@ -218,8 +218,12 @@
     .portrait-placeholder { color: #1a1a1a; font-size: 12px; text-transform: uppercase; font-weight: bold; text-align: center; pointer-events: none; opacity: 0.6; }
 
     .points-ui { font-size: 28px; font-weight: bold; color: #1a1a1a; background: transparent; border: none; padding: 0; box-shadow: none; letter-spacing: -1px; white-space: nowrap; text-transform: uppercase; }
-    .target-die-ui { font-size: 20px; font-weight: bold; color: #1a1a1a; background: transparent; border: none; padding: 0; box-shadow: none; letter-spacing: -1px; white-space: nowrap; text-transform: uppercase; }
-    /* --- Printer Friendly Override --- */
+.target-die-ui { font-size: 20px; font-weight: bold; color: #1a1a1a; background: transparent; border: none; padding: 0; box-shadow: none; letter-spacing: -1px; white-space: nowrap; text-transform: uppercase; }
+    
+    .crew-manifest-ui { width: 180px; background: #ffffff; border: 3px solid #1a1a1a; box-shadow: 4px 4px 0px #4a7c82; display: flex; flex-direction: column; transition: box-shadow 0.1s; align-items: stretch; justify-content: flex-start; }    .crew-header { background: #1a1a1a; color: white; text-align: center; font-weight: bold; padding: 6px; text-transform: uppercase; font-size: 12px; letter-spacing: 1px; }
+    .crew-list { padding: 10px; display: flex; flex-direction: column; gap: 6px; font-weight: bold; text-transform: uppercase; font-size: 14px; color: #1a1a1a; }
+    
+    /* --- Printer Friendly Override --- */    /* --- Printer Friendly Override --- */
     body.printer-friendly .target-number { background: #ffffff !important; color: #000000 !important; border-color: #000000 !important; }
     body.printer-friendly .target-number::before, body.printer-friendly .target-number::after { border-color: #000000 !important; }    body.printer-friendly #workspace { background-color: #ffffff !important; background-image: none !important; box-shadow: none !important; }
     body.printer-friendly .room, body.printer-friendly .hull-ui, body.printer-friendly .power-pool-ui, body.printer-friendly .speed-track-ui { border-color: #000000 !important; background-color: #ffffff !important; box-shadow: none !important; }
@@ -233,6 +237,8 @@
     body.printer-friendly .shield-svg { filter: none !important; }
     body.printer-friendly .portrait-ui { box-shadow: none !important; border-color: #000000 !important; }
     body.printer-friendly .portrait-ui:not(.has-image) { display: none !important; }
+    body.printer-friendly .crew-manifest-ui { border-color: #000000 !important; box-shadow: none !important; }
+    body.printer-friendly .crew-header { background: #ffffff !important; color: #000000 !important; border-bottom: 2px solid #000000 !important; }
     /* --- Modal Styling --- */
     #modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; z-index: 1000; }
     #modal-content { background: #f0ebe1; color: #1a1a1a; width: 500px; max-height: 80vh; border: 3px solid #1a1a1a; display: flex; flex-direction: column; overflow: hidden; box-shadow: 8px 8px 0px #c05c3d;}
@@ -355,6 +361,11 @@
       <label style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Helm:</label>
       <select id="helm-select" style="width: 100%; margin-top: 5px;"></select>
     </div>
+
+    <hr style="border-color: #3a3835; margin: 5px 0;">
+    <h3 style="margin: 0; font-size: 14px; letter-spacing: -1px; text-transform: uppercase; color: #a19d94;">Crew Roster</h3>
+    <div id="crew-sidebar-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
+    <button id="btn-add-crew" style="font-weight: bold; text-transform: uppercase; margin-top: 5px; background: #4a7c82; color: white; border: 1px solid #1a1a1a;">+ Add Crew</button>
   </div>
 
   <!-- Library Modal Overlay -->

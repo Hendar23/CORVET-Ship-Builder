@@ -1,3 +1,13 @@
+const crewConfig = { cost: 20, roomsPerCrew: 3 };
+
+const crewPerks = [
+  { id: "none", name: "No Perk", cost: 0 },
+  { id: "pilot", name: "Pilot", cost: 30 },
+  { id: "gunner", name: "Gunner", cost: 20 },
+  { id: "engineer", name: "Engineer", cost: 20 },
+  { id: "runner", name: "Runner", cost: 20 }
+];
+
 const hullDatabase = [
   { id: "hull_light", name: "Light Hull", hp: 4, cost: 10 },
   { id: "hull_medium", name: "Medium Hull", hp: 6, cost: 30 },
