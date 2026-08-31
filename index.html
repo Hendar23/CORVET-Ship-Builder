@@ -126,21 +126,54 @@
       box-shadow: 6px 6px 0px #c05c3d;
     }
 
-   /* --- Custom Room Shapes --- */
+    /* --- Custom Room Shapes --- */
     [data-id="corridor_circle"] {
-      /* Rounded square, leaves flat edges for 70px doors */
-      border-radius: 35px; 
+      /* 130px room: 30px curves leave exactly 70px flat on all sides to connect cleanly */
+      border-radius: 30px; 
     }
     
-    [data-id="corridor_curve"] {
-      /* Outer curve and softened inner curve for an elbow joint */
-      border-top-right-radius: 90px;
-      border-bottom-left-radius: 35px;
+    [data-id^="corridor_curve"] {
+      background-color: transparent !important; /* Removes white corners */
+      border: none;
+      box-shadow: none !important;
+      filter: drop-shadow(4px 4px 0px #c05c3d); /* Perfectly traces the transparent gradient */
+    }
+    
+    [data-id^="corridor_curve"].dragging {
+      filter: drop-shadow(6px 6px 0px #c05c3d);
+    }
+    
+    [data-id="corridor_curve_ne"] {
+      background: radial-gradient(circle at bottom left, transparent 17px, #1a1a1a 17px, #1a1a1a 20px, #ffffff 20px, #ffffff 87px, #1a1a1a 87px, #1a1a1a 90px, transparent 90px);
+    }
+    
+    [data-id="corridor_curve_nw"] {
+      background: radial-gradient(circle at bottom right, transparent 17px, #1a1a1a 17px, #1a1a1a 20px, #ffffff 20px, #ffffff 87px, #1a1a1a 87px, #1a1a1a 90px, transparent 90px);
+    }
+    
+    [data-id="corridor_curve_se"] {
+      background: radial-gradient(circle at top left, transparent 17px, #1a1a1a 17px, #1a1a1a 20px, #ffffff 20px, #ffffff 87px, #1a1a1a 87px, #1a1a1a 90px, transparent 90px);
+    }
+    
+    [data-id="corridor_curve_sw"] {
+      background: radial-gradient(circle at top right, transparent 17px, #1a1a1a 17px, #1a1a1a 20px, #ffffff 20px, #ffffff 87px, #1a1a1a 87px, #1a1a1a 90px, transparent 90px);
     }
     
     [data-id="corridor_cross"] {
-      /* Trims 10px from all 4 corners to create a 70px wide + shape */
+      /* Trims 10px from all corners to create 70px wide arms */
       clip-path: polygon(10px 0, 80px 0, 80px 10px, 90px 10px, 90px 80px, 80px 80px, 80px 90px, 10px 90px, 10px 80px, 0 80px, 0 10px, 10px 10px);
+      box-shadow: none !important; /* Turn off standard box shadow as it breaks on clipped paths */
+      filter: drop-shadow(4px 4px 0px #c05c3d); /* Use drop-shadow to perfectly outline the cross */
+    }
+    
+    [data-id="corridor_cross"].dragging {
+      filter: drop-shadow(6px 6px 0px #c05c3d);
+    }
+    
+    /* Hide the blocky rectangular nameplates so they don't visually overlap the custom shapes */
+    [data-id^="corridor_curve"] .room-name, 
+    [data-id="corridor_cross"] .room-name {
+      display: none;
     }
     
     .room-inner { width: 100%; height: 100%; position: relative; }    

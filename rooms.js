@@ -60,7 +60,7 @@ const hullDatabase = [
 const roomDatabase = [
     {
         id: "corridor_v",
-        name: "Vertical Corridor",
+        name: "Corridor Vertical",
         type: "corridor",
         cost: 0,
         width: 70,
@@ -69,7 +69,7 @@ const roomDatabase = [
     },
     {
         id: "corridor_v_s",
-        name: "Short Vert Corridor",
+        name: "Corridor Short Vert",
         type: "corridor",
         cost: 0,
         width: 70,
@@ -78,7 +78,7 @@ const roomDatabase = [
     },
     {
         id: "corridor_h",
-        name: "Horizontal Corridor",
+        name: "Corridor Horizontal ",
         type: "corridor",
         cost: 0,
         width: 180,
@@ -87,7 +87,7 @@ const roomDatabase = [
     },
     {
         id: "corridor_h_s",
-        name: "Short Hor Corridor",
+        name: "Corridor Short Hor ",
         type: "corridor",
         cost: 0,
         width: 90,
@@ -95,8 +95,35 @@ const roomDatabase = [
         max_connections: 3
     },
     {
-        id: "corridor_curve",
-        name: "Curved Corridor",
+        id: "corridor_curve_ne",
+        name: "Corridor Curve NE",
+        type: "corridor",
+        cost: 0,
+        width: 90,
+        height: 90,
+        max_connections: 2
+    },
+    {
+        id: "corridor_curve_nw",
+        name: "Corridor Curve NW",
+        type: "corridor",
+        cost: 0,
+        width: 90,
+        height: 90,
+        max_connections: 2
+    },
+    {
+        id: "corridor_curve_se",
+        name: "Corridor Curve SE",
+        type: "corridor",
+        cost: 0,
+        width: 90,
+        height: 90,
+        max_connections: 2
+    },
+    {
+        id: "corridor_curve_sw",
+        name: "Corridor Curve SW",
         type: "corridor",
         cost: 0,
         width: 90,
@@ -105,7 +132,7 @@ const roomDatabase = [
     },
     {
         id: "corridor_circle",
-        name: "Hub Corridor",
+        name: "Corridor Hub",
         type: "corridor",
         cost: 0,
         width: 130,
