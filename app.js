@@ -176,7 +176,6 @@ function createUIElement(type, startX, startY, customText = null, customClassTex
     el.textContent = 'TARGET DIE: D0';
   } else if (type === 'portrait') {
     el.className = 'board-ui portrait-ui';
-    el.id = 'board-portrait';
     if (customText && customText.startsWith('data:image')) {
       el.classList.add('has-image');
       el.innerHTML = `<img src="${customText}" /><div class="portrait-placeholder">Double-Click<br>To Add Image</div>`;
@@ -184,8 +183,22 @@ function createUIElement(type, startX, startY, customText = null, customClassTex
       el.innerHTML = `<img src="" /><div class="portrait-placeholder">Double-Click<br>To Add Image</div>`;
     }
     
+    // Add standard delete button
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'btn-delete-room';
+    deleteBtn.innerHTML = '&times;';
+    deleteBtn.title = 'Delete Image Box';
+    deleteBtn.addEventListener('mousedown', (e) => e.stopPropagation());
+    deleteBtn.addEventListener('click', () => {
+      el.remove();
+      autoSaveWorkspace();
+    });
+    el.appendChild(deleteBtn);
+    
     el.addEventListener('dblclick', (e) => {
       e.stopPropagation();
+      // Track exactly which portrait box is being clicked for the upload
+      window.activePortraitForUpload = el;
       document.getElementById('file-portrait').click();
     });
   } else if (type === 'crew-manifest') {
@@ -610,12 +623,53 @@ document.getElementById('ship-class-input').addEventListener('input', (e) => {
   autoSaveWorkspace();
 });
 
+function getEmptySpace(width, height) {
+  const els = document.querySelectorAll('.room, .board-ui');
+  let startX = 50, startY = 50;
+  let safe = false;
+  
+  while (!safe && startY < 2000) {
+    safe = true;
+    for (let i = 0; i < els.length; i++) {
+      let el = els[i];
+      let elL = el.offsetLeft;
+      let elT = el.offsetTop;
+      let elR = elL + el.offsetWidth;
+      let elB = elT + el.offsetHeight;
+      
+      // If the proposed box intersects with an existing element, it is not safe
+      if (startX < elR && startX + width > elL && startY < elB && startY + height > elT) {
+        safe = false;
+        break;
+      }
+    }
+    // Nudge coordinates if intersection found
+    if (!safe) {
+      startX += 20;
+      if (startX > 700) { startX = 50; startY += 20; }
+    }
+  }
+  return { x: startX, y: startY };
+}
+
 document.getElementById('btn-add').addEventListener('click', () => {
   const selectedId = document.getElementById('room-select').value;
-  createRoom(selectedId, 50, 50); 
+  const roomData = roomDatabase.find(r => r.id === selectedId);
+  if (!roomData) return;
+  
+  const coords = getEmptySpace(roomData.width, roomData.height);
+  createRoom(selectedId, coords.x, coords.y); 
+  
   updatePoints();
   updateDoors();
   updateTargetNumbers();
+  updateZIndices();
+  autoSaveWorkspace();
+});
+
+document.getElementById('btn-add-image')?.addEventListener('click', () => {
+  const coords = getEmptySpace(180, 180); // Default portrait size is 180x180
+  createUIElement('portrait', coords.x, coords.y);
   updateZIndices();
   autoSaveWorkspace();
 });
@@ -676,11 +730,11 @@ document.getElementById('file-portrait').addEventListener('change', (e) => {
       
       const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
       
-      const portraitEl = document.getElementById('board-portrait');
-      if (portraitEl) {
-        portraitEl.classList.add('has-image');
-        portraitEl.querySelector('img').src = compressedDataUrl;
+      if (window.activePortraitForUpload) {
+        window.activePortraitForUpload.classList.add('has-image');
+        window.activePortraitForUpload.querySelector('img').src = compressedDataUrl;
         autoSaveWorkspace();
+        window.activePortraitForUpload = null; // Clear tracking var
       }
     };
     img.src = event.target.result;
@@ -702,7 +756,7 @@ function getCurrentLayoutData() {
     }
 
     let customImg = null;
-    if (el.id === 'board-portrait' && el.classList.contains('has-image')) {
+    if (el.dataset.uiType === 'portrait' && el.classList.contains('has-image')) {
       customImg = el.querySelector('img').src;
     }
 
@@ -712,7 +766,7 @@ function getCurrentLayoutData() {
       left: el.style.left,
       top: el.style.top,
       customText: el.id === 'ship-header' ? document.getElementById('ship-name-display').textContent : 
-                  (el.id === 'board-portrait' ? customImg : 
+                  (el.dataset.uiType === 'portrait' ? customImg : 
                   (el.dataset.uiType === 'hull' ? document.getElementById('hull-select').value : 
                   (el.dataset.uiType === 'crew-manifest' ? JSON.stringify(shipCrew) : null))),
       customClassText: el.id === 'ship-header' ? document.getElementById('ship-class-display').textContent : null,
