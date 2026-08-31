@@ -31,7 +31,8 @@ function loadThemePreference() {
 function updateThemeButton() {
   const btn = document.getElementById('btn-theme');
   if (!btn) return;
-  const icon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path></svg>`;  if (document.body.classList.contains('printer-friendly')) {
+  const icon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path></svg>`;  
+  if (document.body.classList.contains('printer-friendly')) {
     btn.innerHTML = `${icon} Printer Friendly: ON`;
     btn.classList.add('active-mode');
   } else {
@@ -44,9 +45,9 @@ function setupDefaultWorkspace() {
   workspace.innerHTML = ''; 
   document.getElementById('ship-name-input').value = 'NEW SHIP';
   document.getElementById('ship-class-input').value = 'CORVETTE';
+  shipCrew = [{ name: 'Crewman 1', perk: 'none' }]; 
   setupBoardElements();
   setupCoreRooms();
-  shipCrew = [{ name: 'Crewman 1', perk: 'none' }];
   updatePoints();
   updateDoors();
   updateTargetNumbers();
@@ -185,7 +186,6 @@ function createUIElement(type, startX, startY, customText = null, customClassTex
       el.innerHTML = `<img src="" /><div class="portrait-placeholder">Double-Click<br>To Add Image</div>`;
     }
     
-    // Add standard delete button
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'btn-delete-room';
     deleteBtn.innerHTML = '&times;';
@@ -199,7 +199,6 @@ function createUIElement(type, startX, startY, customText = null, customClassTex
     
     el.addEventListener('dblclick', (e) => {
       e.stopPropagation();
-      // Track exactly which portrait box is being clicked for the upload
       window.activePortraitForUpload = el;
       document.getElementById('file-portrait').click();
     });
@@ -235,7 +234,6 @@ function createRoom(roomId, startX = 100, startY = 100, arcState = 0) {
   if (roomData.type === 'corridor') {
     workspace.appendChild(room);
     
-    // Corridors still get delete buttons
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'btn-delete-room';
     deleteBtn.innerHTML = '&times;';
@@ -316,7 +314,6 @@ function createRoom(roomId, startX = 100, startY = 100, arcState = 0) {
   targetDiv.classList.add('target-number');
   inner.appendChild(targetDiv);
 
-  // Delete Button
   if (roomData.type !== 'core') {
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'btn-delete-room';
@@ -371,7 +368,6 @@ function makeDraggable(element, shouldSnap = true) {
     const groupBtn = document.getElementById('btn-group-move');
     const isGroupMove = groupBtn && groupBtn.classList.contains('active-mode');
     
-    // Group move only triggers if the toggle is ON and you grab a room/corridor
     if (isGroupMove && element.classList.contains('room')) {
       groupData = Array.from(document.querySelectorAll('.room')).map(r => ({
         el: r,
@@ -426,12 +422,12 @@ function updateDoors() {
       const t2 = r2.offsetTop;
       const b2 = t2 + r2.offsetHeight;
       
-      // Vertical Edge Adjacency (Left/Right)
       if (right1 === l2 || right2 === l1) {
         const overlapTop = Math.max(t1, t2);
         const overlapBottom = Math.min(b1, b2);
         
-        if (overlapBottom - overlapTop >= 20) {
+        // Door is 48px tall. Minimum 54px overlap guarantees 3px margin on each side.
+        if (overlapBottom - overlapTop >= 54) {
           const y = (overlapTop + overlapBottom) / 2;
           const x = (right1 === l2) ? right1 : right2;
           
@@ -446,14 +442,12 @@ function updateDoors() {
         }
       }
       
-      // Horizontal Edge Adjacency
-      
-      // Horizontal Edge Adjacency (Top/Bottom)
       if (b1 === t2 || b2 === t1) {
         const overlapLeft = Math.max(l1, l2);
         const overlapRight = Math.min(right1, right2);
         
-        if (overlapRight - overlapLeft >= 20) {
+        // Door is 48px wide. Minimum 54px overlap guarantees 3px margin on each side.
+        if (overlapRight - overlapLeft >= 54) {
           const x = (overlapLeft + overlapRight) / 2;
           const y = (b1 === t2) ? b1 : b2;
           
@@ -476,7 +470,6 @@ function updateDoors() {
 function updateZIndices() {
   document.querySelectorAll('.room, .board-ui').forEach(el => {
     if (!el.classList.contains('dragging')) {
-      // Calculate spatial z-index so bottom-right elements overlap top-left shadows
       const x = parseInt(el.style.left) || 0;
       const y = parseInt(el.style.top) || 0;
       el.style.zIndex = x + y; 
@@ -490,7 +483,6 @@ function updateTargetNumbers() {
     return data && data.type !== 'corridor';
   });
 
-  // Sort top-to-bottom, then left-to-right (using a 20px threshold for rows)
   rooms.sort((a, b) => {
     const aTop = parseInt(a.style.top);
     const bTop = parseInt(b.style.top);
@@ -509,7 +501,6 @@ function updateTargetNumbers() {
     }
   });
 
-  // Calculate the nearest standard polyhedral die
   const roomCount = rooms.length;
   let dieType = 0;
   if (roomCount === 0) dieType = 0;
@@ -519,7 +510,7 @@ function updateTargetNumbers() {
   else if (roomCount <= 10) dieType = 10;
   else if (roomCount <= 12) dieType = 12;
   else if (roomCount <= 20) dieType = 20;
-  else dieType = 100; // For massive dreadnoughts!
+  else dieType = 100;
 
   const dieDisplay = document.getElementById('board-target-die');
   if (dieDisplay) {
@@ -554,7 +545,7 @@ function updateWarnings(rooms, connections) {
   let warnings = [];
   
   const requiredCorridors = Math.floor(standardRoomCount / 3);
-  const allowedCrew = Math.max(1, Math.ceil(standardRoomCount / crewConfig.roomsPerCrew));
+  const allowedCrew = 1 + Math.ceil(standardRoomCount / crewConfig.roomsPerCrew);
 
   if (corridorCount < requiredCorridors) {
     warnings.push(`⚠️ Not enough corridors (Min ${requiredCorridors} required for ${standardRoomCount} rooms)`);
@@ -608,7 +599,6 @@ function updatePoints() {
   if (boardPoints) boardPoints.textContent = total + " Points";
 }
 
-// Sync sidebar input to the board elements
 document.getElementById('ship-name-input').addEventListener('input', (e) => {
   const display = document.getElementById('ship-name-display');
   if (display) {
@@ -639,13 +629,11 @@ function getEmptySpace(width, height) {
       let elR = elL + el.offsetWidth;
       let elB = elT + el.offsetHeight;
       
-      // If the proposed box intersects with an existing element, it is not safe
       if (startX < elR && startX + width > elL && startY < elB && startY + height > elT) {
         safe = false;
         break;
       }
     }
-    // Nudge coordinates if intersection found
     if (!safe) {
       startX += 20;
       if (startX > 700) { startX = 50; startY += 20; }
@@ -670,7 +658,7 @@ document.getElementById('btn-add').addEventListener('click', () => {
 });
 
 document.getElementById('btn-add-image')?.addEventListener('click', () => {
-  const coords = getEmptySpace(180, 180); // Default portrait size is 180x180
+  const coords = getEmptySpace(180, 180); 
   createUIElement('portrait', coords.x, coords.y);
   updateZIndices();
   autoSaveWorkspace();
@@ -685,7 +673,8 @@ document.getElementById('btn-refresh-numbers').addEventListener('click', () => {
   autoSaveWorkspace();
 });
 
-document.getElementById('btn-group-move').addEventListener('click', (e) => {  const btn = e.currentTarget;
+document.getElementById('btn-group-move').addEventListener('click', (e) => {  
+  const btn = e.currentTarget;
   btn.classList.toggle('active-mode');
   const icon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M19 9l3 3-3 3M9 19l3 3 3 3M2 12h20M12 2v20"/></svg>`;
   if (btn.classList.contains('active-mode')) {
@@ -736,7 +725,7 @@ document.getElementById('file-portrait').addEventListener('change', (e) => {
         window.activePortraitForUpload.classList.add('has-image');
         window.activePortraitForUpload.querySelector('img').src = compressedDataUrl;
         autoSaveWorkspace();
-        window.activePortraitForUpload = null; // Clear tracking var
+        window.activePortraitForUpload = null; 
       }
     };
     img.src = event.target.result;
@@ -744,8 +733,6 @@ document.getElementById('file-portrait').addEventListener('change', (e) => {
   reader.readAsDataURL(file);
   e.target.value = ''; 
 });
-
-// --- LIBRARY & WORKSPACE MANAGEMENT ---
 
 function getCurrentLayoutData() {
   const elements = document.querySelectorAll('.room, .board-ui');
@@ -904,7 +891,6 @@ document.getElementById('btn-open-lib').addEventListener('click', () => {
     shipLibrary.forEach((ship, index) => {
       let shipPoints = ship.points;
       
-      // Fallback for ships saved before the points variable was added
       if (shipPoints === undefined) {
         shipPoints = 0;
         ship.layout.forEach(item => {

@@ -272,11 +272,10 @@
     .crew-manifest-ui { width: 180px; background: #ffffff; border: 3px solid #1a1a1a; box-shadow: 4px 4px 0px #4a7c82; display: flex; flex-direction: column; transition: box-shadow 0.1s; align-items: stretch; justify-content: flex-start; }    .crew-header { background: #1a1a1a; color: white; text-align: center; font-weight: bold; padding: 6px; text-transform: uppercase; font-size: 12px; letter-spacing: 1px; }
     .crew-list { padding: 10px; display: flex; flex-direction: column; gap: 6px; font-weight: bold; text-transform: uppercase; font-size: 14px; color: #1a1a1a; }
     
-    /* --- Printer Friendly Override --- */    /* --- Printer Friendly Override --- */
+  /* --- Printer Friendly Override --- */
     body.printer-friendly .target-number { background: #ffffff !important; color: #000000 !important; border-color: #000000 !important; }
     body.printer-friendly .target-number::before, body.printer-friendly .target-number::after { border-color: #000000 !important; }    body.printer-friendly #workspace { background-color: #ffffff !important; background-image: none !important; box-shadow: none !important; }
-    body.printer-friendly .room, body.printer-friendly .hull-ui, body.printer-friendly .power-pool-ui, body.printer-friendly .speed-track-ui { border-color: #000000 !important; background-color: #ffffff !important; box-shadow: none !important; }
-    body.printer-friendly .power-pool-ui { background-image: none !important; }    
+    body.printer-friendly .room, body.printer-friendly .hull-ui, body.printer-friendly .power-pool-ui, body.printer-friendly .speed-track-ui { border-color: #000000 !important; background-color: #ffffff !important; box-shadow: none !important; filter: none !important; }    body.printer-friendly .power-pool-ui { background-image: none !important; }    
     body.printer-friendly .hp-box { background: #000000 !important; color: #000000 !important; border: none !important; z-index: 1; }
     body.printer-friendly .hp-box::before { content: ''; position: absolute; top: 2px; left: 2px; right: 2px; bottom: 2px; background: #ffffff !important; clip-path: polygon(0 0, 100% 0, 100% 72%, 72% 100%, 0 100%); z-index: -1; }
     body.printer-friendly .ammo-box { border-bottom: 2px solid #000000 !important; }

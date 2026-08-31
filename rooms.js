@@ -305,7 +305,7 @@ const roomDatabase = [
     },
     {
         id: "fire_suppression",
-        name: "Fire Suppression System",
+        name: "Fire Suppression",
         type: "auxiliary",
         cost: 15,
         width: 130,
