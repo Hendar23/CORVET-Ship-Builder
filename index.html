@@ -204,6 +204,15 @@
       font-size: 18px; font-weight: bold;
       clip-path: polygon(0 0, 100% 0, 100% 75%, 75% 100%, 0 100%); 
     }
+
+    .reactor-hp-box {
+      position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+      width: 50px; height: 50px; background: #c05c3d; color: #ffffff; 
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px; font-weight: bold;
+      clip-path: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%); 
+      z-index: 10;
+    }
     
     .ammo-box {
       position: absolute; top: 10px; right: 10px; width: 35px; height: 35px;
@@ -213,7 +222,7 @@
     }
     
     .manned-circle {
-      position: absolute; top: 60px; left: 10px; width: 40px; height: 40px;
+      position: absolute; bottom: 42px; left: 10px; width: 40px; height: 40px;
       border: 2px dashed #1a1a1a; border-radius: 50%; 
     }
 
@@ -298,7 +307,9 @@
     body.printer-friendly .room, body.printer-friendly .hull-ui, body.printer-friendly .power-pool-ui, body.printer-friendly .speed-track-ui { border-color: #000000 !important; background-color: #ffffff !important; box-shadow: none !important; filter: none !important; }    body.printer-friendly .power-pool-ui { background-image: none !important; }    
     body.printer-friendly .hp-box { background: #000000 !important; color: #000000 !important; border: none !important; z-index: 1; }
     body.printer-friendly .hp-box::before { content: ''; position: absolute; top: 2px; left: 2px; right: 2px; bottom: 2px; background: #ffffff !important; clip-path: polygon(0 0, 100% 0, 100% 72%, 72% 100%, 0 100%); z-index: -1; }
-    body.printer-friendly .ammo-box { border-bottom: 2px solid #000000 !important; }
+    
+    body.printer-friendly .reactor-hp-box { background: #000000 !important; color: #000000 !important; border: none !important; z-index: 1; }
+    body.printer-friendly .reactor-hp-box::before { content: ''; position: absolute; top: 2px; left: 2px; right: 2px; bottom: 2px; background: #ffffff !important; clip-path: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%); z-index: -1; }    body.printer-friendly .ammo-box { border-bottom: 2px solid #000000 !important; }
     body.printer-friendly .room-name { background: #ffffff !important; color: #000000 !important; border-top: 2px solid #000000 !important; }
     body.printer-friendly .ship-class-text { color: #000000 !important; }
     body.printer-friendly .door { background: #ffffff !important; border-color: #000000 !important; }
@@ -413,10 +424,15 @@
     <h2 style="margin-top: 0; letter-spacing: -1px; text-transform: uppercase; border-bottom: 2px solid #4a4742; padding-bottom: 10px;">Loadout<br>Options</h2>
     
     <div>
-      <label style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Hull Profile:</label>
+      <label style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Hull:</label>
       <select id="hull-select" style="width: 100%; margin-top: 5px;"></select>
     </div>
     
+    <div>
+      <label style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Shield Bank:</label>
+      <select id="shield-select" style="width: 100%; margin-top: 5px;"></select>
+    </div>
+
     <div>
       <label style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Reactor:</label>
       <select id="reactor-select" style="width: 100%; margin-top: 5px;"></select>

@@ -57,6 +57,12 @@ const hullDatabase = [
     }
 ];
 
+const shieldDatabase = [
+    { id: "shield_light", name: "Light Shields", hp: 2, cost: 15 },
+    { id: "shield_medium", name: "Medium Shields", hp: 3, cost: 30 },
+    { id: "shield_heavy", name: "Heavy Shields", hp: 4, cost: 50 }
+];
+
 const roomDatabase = [
     {
         id: "corridor_v",
@@ -269,7 +275,7 @@ const roomDatabase = [
     },
     {
         id: "medical_room",
-        name: "Medical Room",
+        name: "Medbay",
         type: "auxiliary",
         cost: 15,
         width: 130,
@@ -293,7 +299,7 @@ const roomDatabase = [
     },  
     {
         id: "nanobots",
-        name: "Nanobots",
+        name: "Nanobot Controller",
         type: "auxiliary",
         cost: 15,
         width: 130,

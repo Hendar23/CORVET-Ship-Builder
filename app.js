@@ -97,6 +97,15 @@ function populateDropdown() {
   });
   hullSelect.value = "hull_medium"; 
 
+  const shieldSelect = document.getElementById('shield-select');
+  shieldDatabase.forEach(shield => {
+    const option = document.createElement('option');
+    option.value = shield.id;
+    option.textContent = `${shield.name} (${shield.cost} pts)`;
+    shieldSelect.appendChild(option);
+  });
+  shieldSelect.value = "shield_medium";
+
   const populateCore = (categoryId, elementId) => {
     const sel = document.getElementById(elementId);
     const variants = roomDatabase.filter(r => r.core_category === categoryId)
@@ -147,11 +156,13 @@ function createUIElement(type, startX, startY, customText = null, customClassTex
     el.innerHTML = `<div>${hullData.hp}</div><div class="ui-label">HULL</div>`;
   } else if (type === 'shields') {
     el.className = 'board-ui shield-ui';
+    el.dataset.shieldId = customText || 'shield_medium';
+    const shieldData = shieldDatabase.find(s => s.id === el.dataset.shieldId) || shieldDatabase[1];
     el.innerHTML = `
       <svg class="shield-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
         <polygon points="50,5 95,25 95,75 50,95 5,75 5,25"/>
       </svg>
-      <span>3</span>
+      <span>${shieldData.hp}</span>
       <div class="ui-label">SHIELDS</div>
     `;
   } else if (type === 'power') {
@@ -257,7 +268,11 @@ function createRoom(roomId, startX = 100, startY = 100, arcState = 0) {
 
   if (roomData.max_hp !== undefined) {
     const hpBox = document.createElement('div');
-    hpBox.classList.add('hp-box');
+    if (roomData.core_category === 'reactor') {
+      hpBox.classList.add('reactor-hp-box');
+    } else {
+      hpBox.classList.add('hp-box');
+    }
     hpBox.textContent = roomData.max_hp;
     inner.appendChild(hpBox);
   }
@@ -599,6 +614,12 @@ function updatePoints() {
     const hullData = hullDatabase.find(h => h.id === hullSelect.value);
     if (hullData && hullData.cost) total += hullData.cost;
   }
+
+  const shieldSelect = document.getElementById('shield-select');
+  if (shieldSelect) {
+    const shieldData = shieldDatabase.find(s => s.id === shieldSelect.value);
+    if (shieldData && shieldData.cost) total += shieldData.cost;
+  }
   
   if (typeof crewConfig !== 'undefined') {
     total += (shipCrew.length * crewConfig.cost);
@@ -775,7 +796,8 @@ function getCurrentLayoutData() {
       customText: el.id === 'ship-header' ? document.getElementById('ship-name-display').textContent : 
                   (el.dataset.uiType === 'portrait' ? customImg : 
                   (el.dataset.uiType === 'hull' ? document.getElementById('hull-select').value : 
-                  (el.dataset.uiType === 'crew-manifest' ? JSON.stringify(shipCrew) : null))),
+                  (el.dataset.uiType === 'shields' ? document.getElementById('shield-select').value : 
+                  (el.dataset.uiType === 'crew-manifest' ? JSON.stringify(shipCrew) : null)))),
       customClassText: el.id === 'ship-header' ? document.getElementById('ship-class-display').textContent : null,
       arcState: arcState
     });
@@ -922,6 +944,9 @@ document.getElementById('btn-open-lib').addEventListener('click', () => {
           } else if (item.id === 'hull' && item.customText) {
             const hullData = hullDatabase.find(h => h.id === item.customText);
             if (hullData && hullData.cost) shipPoints += hullData.cost;
+          } else if (item.id === 'shields' && item.customText) {
+            const shieldData = shieldDatabase.find(s => s.id === item.customText);
+            if (shieldData && shieldData.cost) shipPoints += shieldData.cost;
           } else if (item.id === 'crew-manifest' && item.customText) {
              try {
                const parsedCrew = JSON.parse(item.customText);
@@ -996,6 +1021,10 @@ function syncDropdownsToBoard() {
   if (hullUi && hullUi.dataset.hullId) {
     document.getElementById('hull-select').value = hullUi.dataset.hullId;
   }
+  const shieldUi = document.querySelector('.shield-ui');
+  if (shieldUi && shieldUi.dataset.shieldId) {
+    document.getElementById('shield-select').value = shieldUi.dataset.shieldId;
+  }
 }
 
 function swapCoreRoom(category, selectElementId) {
@@ -1033,6 +1062,18 @@ document.getElementById('hull-select').addEventListener('change', (e) => {
     hullUi.dataset.hullId = hullData.id;
     const hpBox = hullUi.querySelector('div:first-child');
     if (hpBox) hpBox.textContent = hullData.hp;
+  }
+  updatePoints();
+  autoSaveWorkspace();
+});
+
+document.getElementById('shield-select').addEventListener('change', (e) => {
+  const shieldData = shieldDatabase.find(s => s.id === e.target.value);
+  const shieldUi = document.querySelector('.shield-ui');
+  if (shieldUi && shieldData) {
+    shieldUi.dataset.shieldId = shieldData.id;
+    const hpSpan = shieldUi.querySelector('span');
+    if (hpSpan) hpSpan.textContent = shieldData.hp;
   }
   updatePoints();
   autoSaveWorkspace();
