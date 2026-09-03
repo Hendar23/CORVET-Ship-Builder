@@ -15,7 +15,8 @@
       min-height: 100vh;
     }
     #sidebar {
-      width: 280px;
+      min-width: 280px;
+      width: max-content;
       padding: 20px;
       background: #171615;
       border-right: 2px solid #3a3835;
@@ -23,6 +24,7 @@
       flex-direction: column;
       gap: 15px;
       z-index: 50;
+      overflow-x: hidden;
       overflow-y: auto;
       position: sticky;
       top: 0;
@@ -31,7 +33,8 @@
       flex-shrink: 0;
     }
     #right-sidebar {
-      width: 280px;
+      min-width: 280px;
+      width: max-content;
       padding: 20px;
       background: #171615;
       border-left: 2px solid #3a3835;
@@ -39,6 +42,7 @@
       flex-direction: column;
       gap: 15px;
       z-index: 50;
+      overflow-x: hidden;
       overflow-y: auto;
       position: sticky;
       top: 0;
@@ -127,23 +131,29 @@
     }
 
     /* --- Error Highlighting --- */
-    @keyframes pulse-error {
-      0% { opacity: 0.4; transform: translate(-50%, -50%) scale(0.9); }
-      50% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
-      100% { opacity: 0.4; transform: translate(-50%, -50%) scale(0.9); }
+    @keyframes pulse-error-border {
+      0% { border-color: #ff4444; box-shadow: 4px 4px 0px #ff4444; }
+      50% { border-color: #8b0000; box-shadow: 4px 4px 0px #8b0000; }
+      100% { border-color: #ff4444; box-shadow: 4px 4px 0px #ff4444; }
     }
-    .room.error-highlight::after {
-      content: '❌';
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      font-size: 50px;
-      z-index: 5000;
-      pointer-events: none;
-      animation: pulse-error 1.5s infinite;
+    @keyframes pulse-error-filter {
+      0% { filter: drop-shadow(4px 4px 0px #ff4444); }
+      50% { filter: drop-shadow(4px 4px 0px #8b0000); }
+      100% { filter: drop-shadow(4px 4px 0px #ff4444); }
     }
-    body.printer-friendly .room.error-highlight::after {
-      display: none !important; /* Hides the error icon when printing */
+    .room.error-highlight {
+      animation: pulse-error-border 1.5s infinite;
+      z-index: 9500; 
+    }
+    [data-id^="corridor_curve"].error-highlight,
+    [data-id="corridor_cross"].error-highlight {
+      animation: pulse-error-filter 1.5s infinite !important;
+    }
+    body.printer-friendly .room.error-highlight {
+      animation: none !important; 
+      border-color: #000000 !important; 
+      box-shadow: none !important;
+      filter: none !important;
     }
 
     /* --- Custom Room Shapes --- */
@@ -215,7 +225,7 @@
     }
     
     .ammo-box {
-      position: absolute; top: 10px; right: 10px; width: 35px; height: 35px;
+      position: absolute; top: 55px; right: 10px; width: 35px; height: 35px;
       border: 2px solid #1a1a1a; display: flex; align-items: center; justify-content: center;
       font-size: 16px; font-weight: bold;
       border-bottom: 5px solid #4a7c82; 
@@ -255,7 +265,7 @@
       background: #ffffff;
       border: 2px solid #1a1a1a;
       box-sizing: border-box;
-      z-index: 3000; /* Ensures the door sits on top of dynamic rooms */
+      z-index: 9000; /* Ensures the door sits on top of dynamic rooms */
       pointer-events: none;
     }
     .door-h { width: 48px; height: 16px; margin-left: -24px; margin-top: -8px; }
@@ -345,7 +355,10 @@
 <body>
 
   <div id="sidebar">
-    <h2 style="margin-top: 0; letter-spacing: -1px; text-transform: uppercase; border-bottom: 2px solid #4a4742; padding-bottom: 10px;">CORVET<br>Ship Builder</h2>
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #4a4742; padding-bottom: 10px;">
+      <h2 style="margin: 0; letter-spacing: -1px; text-transform: uppercase;">CORVET<br>Ship Builder</h2>
+      <button id="btn-about" title="About CORVET" style="background: #2a2826; border: 1px solid #4a4742; color: #e0dcd3; width: 40px; height: 40px; font-size: 24px; display: flex; align-items: center; justify-content: center; padding: 0; border-radius: 50%; font-weight: bold; flex-shrink: 0;">?</button>
+    </div>
     
     <div>
       <label style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Ship Name:</label>
@@ -359,17 +372,19 @@
 
     <div>
       <label for="room-select" style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Select Room:</label>
-      <select id="room-select" style="width: 100%; margin-top: 5px;"></select>
+      <div style="display: flex; gap: 5px; margin-top: 5px; max-width: 240px;">
+        <select id="room-select" style="flex-grow: 1; min-width: 0; width: 100%;"></select>
+        <button id="btn-delete-custom-room" class="btn-danger" style="display: none; font-weight: bold; padding: 0 10px; flex-shrink: 0;" title="Delete Custom Room">&times;</button>
+      </div>
     </div>
+    <button id="btn-add" style="font-weight: bold; text-transform: uppercase; width: 100%; margin-bottom: 8px; margin-top: 5px; background: #4a7c82; color: white; border: 1px solid #1a1a1a; font-size: 16px; padding: 10px;">Add Room</button>
     <div style="display: flex; gap: 8px;">
-      <button id="btn-add" style="font-weight: bold; text-transform: uppercase; flex-grow: 1;">Add Room</button>
+      <button id="btn-custom-room" style="font-weight: bold; text-transform: uppercase; flex-grow: 1;">Custom Room</button>
       <button id="btn-add-image" style="font-weight: bold; text-transform: uppercase; flex-grow: 1;">Add Image Box</button>
     </div>
     
-    <h3 id="points-total" style="margin: 5px 0; color: #c05c3d;">Total Points: 0</h3>    <div id="warnings-container" style="color: #ff4444; font-size: 0.85em; font-weight: bold; line-height: 1.4; margin-bottom: 5px;"></div>
-
-    <hr style="width: 100%; border-color: #3a3835;">
-    
+    <h3 id="points-total" style="margin: 5px 0; color: #c05c3d;">Total Points: 0</h3>
+    <div id="warnings-container" style="color: #ff4444; font-size: 0.85em; font-weight: bold; line-height: 1.4; margin-bottom: 5px; max-width: 240px; white-space: normal;"></div>    <hr style="width: 100%; border-color: #3a3835;">    
     <label style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Library Management:</label>
     <div class="tool-grid">
       <button class="btn-tool" id="btn-new" title="New Ship">
@@ -454,9 +469,65 @@
     <button id="btn-add-crew" style="font-weight: bold; text-transform: uppercase; margin-top: 5px; background: #4a7c82; color: white; border: 1px solid #1a1a1a;">+ Add Crew</button>
   </div>
 
+  <!-- About Modal Overlay -->
+  <div id="about-modal-overlay" style="position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; z-index: 1000;">
+    <div id="about-modal-content" style="background: #171615; color: #e0dcd3; width: 600px; max-height: 85vh; border: 2px solid #3a3835; display: flex; flex-direction: column; box-shadow: 8px 8px 0px #000000;">
+      <div class="modal-header" style="background: #1a1a1a; border-bottom: 2px solid #3a3835; color: white;">
+        <span>The CORVET Ship Builder</span>
+        <span style="cursor:pointer; color:#888;" id="close-about-modal">&times;</span>
+      </div>
+      <div class="modal-body" style="overflow-y: auto; padding: 20px; line-height: 1.5;">
+        <p style="margin-top: 0;"><b>The CORVET Ship Builder</b> is the official web-based companion tool for CORVET, a chaotic, fast-paced skirmish tabletop game of starship combat. This application allows players to design custom spaceships and print the ship boards required for tabletop play.</p>
+        
+        <h3 style="color: #4a7c82; border-bottom: 1px dashed #3a3835; padding-bottom: 5px; margin-bottom: 10px;">About the Game</h3>
+        <p style="margin-top: 0;">CORVET puts players directly in the corridors and engine rooms with their crew. Every turn is an exercise in crisis management: reactors fail, fires spread, and crew members are thrown off their feet by explosions. Players must make meaningful decisions about where to allocate precious power, prioritising repairs and keeping their weapons firing while the ship falls apart around them.</p>
+        
+        <h3 style="color: #4a7c82; border-bottom: 1px dashed #3a3835; padding-bottom: 5px; margin-bottom: 10px;">About the Builder Tool</h3>
+        <p style="margin-top: 0;">In CORVET, each ship is represented by a board used for tracking crew movement, power allocation, and damage. This builder allows for the simple creation of boards for custom ships.</p>
+        <ul style="padding-left: 20px; margin-top: 0;">
+          <li style="margin-bottom: 5px;"><b>Custom Layouts:</b> Drag and drop rooms and corridors to design your ship's physical footprint.</li>
+          <li style="margin-bottom: 5px;"><b>Automated Tracking:</b> The app automatically generates doors between rooms and calculates total point costs.</li>
+          <li style="margin-bottom: 5px;"><b>Loadout Management:</b> Select different Hull profiles, reactor variants and upgrades to fine-tune your ship.</li>
+          <li style="margin-bottom: 5px;"><b>Printer-Friendly Output:</b> Toggle between ink-saving plain black and white boards, or beautiful printer-destroying ones.</li>
+          <li style="margin-bottom: 5px;"><b>Local Library:</b> Save, load, export, and merge your ship designs entirely within your browser.</li>
+        </ul>
+        
+        <h3 style="color: #c05c3d; border-bottom: 1px dashed #3a3835; padding-bottom: 5px; margin-bottom: 10px;">Where to get CORVET?</h3>
+        <p style="margin-top: 0;">CORVET and the Ship Builder are currently a work in progress. While the core mechanics are functioning well, the game is in the active process of adding new content and balancing point costs.</p>
+        <p>If you would like to help with playtesting, provide feedback on the rules, or report bugs with this builder, please join the community Discord server: <a href="https://discord.gg/v6Z32n3emU" target="_blank" style="color: #4a7c82; font-weight: bold; text-decoration: none;">discord.gg/v6Z32n3emU</a>.</p>
+      </div>
+      <div class="modal-footer" style="background: #1a1a1a; border-top: 2px solid #3a3835; text-align: center;">
+        <button id="btn-close-about" style="color:white; background: #4a7c82; font-family: inherit; padding: 8px 16px; border: 1px solid #4a4742; font-weight: bold; cursor: pointer;">Dismiss</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom Room Modal Overlay -->
+  <div id="room-modal-overlay" style="position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; z-index: 1000;">    <div id="room-modal-content" style="background: #171615; color: #e0dcd3; width: 400px; border: 2px solid #3a3835; display: flex; flex-direction: column; box-shadow: 8px 8px 0px #000000;">
+      <div class="modal-header" style="background: #1a1a1a; border-bottom: 2px solid #3a3835; color: white;">
+        <span>Custom Room</span>
+        <span style="cursor:pointer; color:#888;" id="close-room-modal">&times;</span>
+      </div>
+      <div class="modal-body" style="display: flex; flex-direction: column; gap: 10px;">
+        <div><label><b>Room Name:</b></label><input type="text" id="cr-name" style="width: 100%; margin-top: 5px;" value="New System"></div>
+        <div style="display: flex; gap: 10px;">
+          <div style="flex-grow: 1;"><label><b>Point Cost:</b></label><input type="number" id="cr-cost" style="width: 100%; box-sizing: border-box; background: #2a2826; color: #e0dcd3; border: 1px solid #4a4742; padding: 8px; margin-top: 5px; font-family: inherit;" value="15"></div>
+          <div style="width: 80px;"><label><b>HP:</b></label><input type="number" id="cr-hp" style="width: 100%; box-sizing: border-box; background: #2a2826; color: #e0dcd3; border: 1px solid #4a4742; padding: 8px; margin-top: 5px; font-family: inherit;" value="2"></div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 5px; margin-top: 10px;">
+          <label style="cursor:pointer;"><input type="checkbox" id="cr-mannable"> Is Mannable (Crew Circle)</label>
+          <label style="cursor:pointer;"><input type="checkbox" id="cr-arc"> Has Firing Arc</label>
+          <label>Ammo (0 for none): <input type="number" id="cr-ammo" style="width: 60px; background: #2a2826; color: #e0dcd3; border: 1px solid #4a4742; padding: 4px; font-family: inherit;" value="0"></label>
+        </div>
+      </div>
+      <div class="modal-footer" style="background: #1a1a1a; border-top: 2px solid #3a3835;">
+        <button id="btn-save-custom-room" style="color:white; background: #4a7c82; font-family: inherit; padding: 8px 16px; border: 1px solid #4a4742; font-weight: bold; cursor: pointer;">Save Room</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Library Modal Overlay -->
-  <div id="modal-overlay">
-    <div id="modal-content">
+  <div id="modal-overlay">    <div id="modal-content">
       <div class="modal-header">
         <span>Ship Library</span>
         <span style="cursor:pointer; color:#888;" id="close-modal">&times;</span>

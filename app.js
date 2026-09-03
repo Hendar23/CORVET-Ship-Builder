@@ -2,8 +2,26 @@ const workspace = document.getElementById('workspace');
 
 let shipLibrary = [];
 let shipCrew = [{ name: 'Crewman 1', perk: 'none' }];
+let customRoomsDatabase = [];
+
+function loadCustomRoomsFromLocal() {
+  const savedRooms = localStorage.getItem('corvet_custom_rooms');
+  if (savedRooms) {
+    try {
+      customRoomsDatabase = JSON.parse(savedRooms);
+      customRoomsDatabase.forEach(r => {
+        if (!roomDatabase.find(db => db.id === r.id)) {
+          roomDatabase.push(r);
+        }
+      });
+    } catch (e) {
+      console.error("Could not parse saved custom rooms.", e);
+    }
+  }
+}
 
 function init() {
+  loadCustomRoomsFromLocal();
   populateDropdown();
   loadLibraryFromLocal();
   loadThemePreference();
@@ -231,7 +249,11 @@ function setupCoreRooms() {
 
 function createRoom(roomId, startX = 100, startY = 100, arcState = 0) {
   const roomData = roomDatabase.find(r => r.id === roomId);
-  if (!roomData) return;
+  if (!roomData) {
+    console.warn(`Room ID ${roomId} missing.`);
+    alert(`Warning: A saved room could not be found. It may have been deleted.`);
+    return;
+  }
 
   const room = document.createElement('div');
   room.classList.add('room');
@@ -865,7 +887,11 @@ document.getElementById('btn-save-lib').addEventListener('click', () => {
 });
 
 document.getElementById('btn-export').addEventListener('click', () => {
-  const blob = new Blob([JSON.stringify({ corvetLibrary: shipLibrary }, null, 2)], {type: 'application/json'});
+  const exportData = {
+    corvetLibrary: shipLibrary,
+    customRooms: customRoomsDatabase
+  };
+  const blob = new Blob([JSON.stringify(exportData, null, 2)], {type: 'application/json'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -885,7 +911,13 @@ document.getElementById('file-import').addEventListener('change', (e) => {
       if (data.corvetLibrary) {
         shipLibrary = data.corvetLibrary;
         saveLibraryToLocal();
-        alert("Library imported successfully. Previous library was overwritten.");
+        if (data.customRooms) {
+          customRoomsDatabase = data.customRooms;
+          localStorage.setItem('corvet_custom_rooms', JSON.stringify(customRoomsDatabase));
+        }
+        autoSaveWorkspace();
+        alert("Library imported successfully. Previous library was overwritten. Refreshing to apply custom rooms...");
+        location.reload();
       } else {
         alert("Invalid file format.");
       }
@@ -906,7 +938,17 @@ document.getElementById('file-merge').addEventListener('change', (e) => {
       if (data.corvetLibrary) {
         shipLibrary = [...shipLibrary, ...data.corvetLibrary];
         saveLibraryToLocal();
-        alert(`Merged ${data.corvetLibrary.length} ships into your library.`);
+        if (data.customRooms) {
+          data.customRooms.forEach(r => {
+            if (!customRoomsDatabase.find(cr => cr.id === r.id)) {
+              customRoomsDatabase.push(r);
+            }
+          });
+          localStorage.setItem('corvet_custom_rooms', JSON.stringify(customRoomsDatabase));
+        }
+        autoSaveWorkspace();
+        alert(`Merged ${data.corvetLibrary.length} ships into your library. Refreshing to apply custom rooms...`);
+        location.reload();
       }
     } catch (err) { alert("Error reading file."); }
   };
@@ -1174,4 +1216,121 @@ document.getElementById('btn-add-crew').addEventListener('click', () => {
   updatePoints();
   updateDoors(); 
   autoSaveWorkspace();
+});
+
+// --- CUSTOM ROOM LOGIC ---
+const roomModalOverlay = document.getElementById('room-modal-overlay');
+
+document.getElementById('btn-custom-room').addEventListener('click', () => {
+  roomModalOverlay.style.display = 'flex';
+});
+
+document.getElementById('close-room-modal').addEventListener('click', () => {
+  roomModalOverlay.style.display = 'none';
+});
+
+window.addEventListener('click', (e) => {
+  if (e.target === roomModalOverlay) roomModalOverlay.style.display = 'none';
+});
+
+document.getElementById('btn-save-custom-room').addEventListener('click', () => {
+  const name = document.getElementById('cr-name').value || 'Custom Room';
+  const cost = parseInt(document.getElementById('cr-cost').value) || 0;
+  const hp = parseInt(document.getElementById('cr-hp').value) || 1;
+  const isMannable = document.getElementById('cr-mannable').checked;
+  const hasArc = document.getElementById('cr-arc').checked;
+  const ammo = parseInt(document.getElementById('cr-ammo').value) || 0;
+  
+  const newRoom = {
+    id: 'custom_' + Date.now(),
+    name: name,
+    type: 'custom',
+    cost: cost,
+    width: 130, // Locked to standard width
+    height: 180, // Locked to standard height
+    max_connections: 3,
+    max_hp: hp,
+    is_mannable: isMannable,
+    ammo: ammo,
+    has_arc: hasArc
+  };
+  
+  customRoomsDatabase.push(newRoom);
+  roomDatabase.push(newRoom);
+  localStorage.setItem('corvet_custom_rooms', JSON.stringify(customRoomsDatabase));
+  
+  // Rebuild the dropdown to maintain alphabetical sorting
+  const select = document.getElementById('room-select');
+  select.innerHTML = '';
+  roomDatabase.filter(r => r.type !== 'core')
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .forEach(room => {
+      const option = document.createElement('option');
+      option.value = room.id;
+      option.textContent = `${room.name} (${room.cost} pts)`;
+      select.appendChild(option);
+    });
+  select.value = newRoom.id;
+  
+  updateCustomRoomDeleteButton();
+  roomModalOverlay.style.display = 'none';
+});
+
+function updateCustomRoomDeleteButton() {
+  const select = document.getElementById('room-select');
+  const delBtn = document.getElementById('btn-delete-custom-room');
+  if (select && delBtn) {
+    delBtn.style.display = select.value.startsWith('custom_') ? 'block' : 'none';
+  }
+}
+
+document.getElementById('room-select').addEventListener('change', updateCustomRoomDeleteButton);
+
+// Call shortly after init to catch initial state
+setTimeout(updateCustomRoomDeleteButton, 100);
+
+document.getElementById('btn-delete-custom-room').addEventListener('click', () => {
+  const select = document.getElementById('room-select');
+  const selectedId = select.value;
+  
+  if (selectedId.startsWith('custom_')) {
+    if (confirm("Delete this custom room? Ships in your library using this room will still load it, but it will be removed from your spawn menu.")) {
+      customRoomsDatabase = customRoomsDatabase.filter(r => r.id !== selectedId);
+      localStorage.setItem('corvet_custom_rooms', JSON.stringify(customRoomsDatabase));
+      
+      const dbIndex = roomDatabase.findIndex(r => r.id === selectedId);
+      if (dbIndex > -1) roomDatabase.splice(dbIndex, 1);
+      
+      select.innerHTML = '';
+      roomDatabase.filter(r => r.type !== 'core')
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .forEach(room => {
+          const option = document.createElement('option');
+          option.value = room.id;
+          option.textContent = `${room.name} (${room.cost} pts)`;
+          select.appendChild(option);
+        });
+        
+      updateCustomRoomDeleteButton();
+    }
+  }
+});
+
+// --- ABOUT MODAL LOGIC ---
+const aboutModalOverlay = document.getElementById('about-modal-overlay');
+
+document.getElementById('btn-about').addEventListener('click', () => {
+  aboutModalOverlay.style.display = 'flex';
+});
+
+document.getElementById('close-about-modal').addEventListener('click', () => {
+  aboutModalOverlay.style.display = 'none';
+});
+
+document.getElementById('btn-close-about').addEventListener('click', () => {
+  aboutModalOverlay.style.display = 'none';
+});
+
+window.addEventListener('click', (e) => {
+  if (e.target === aboutModalOverlay) aboutModalOverlay.style.display = 'none';
 });
