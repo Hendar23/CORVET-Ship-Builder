@@ -644,7 +644,7 @@ function updatePoints() {
   }
   
   if (typeof crewConfig !== 'undefined') {
-    total += (shipCrew.length * crewConfig.cost);
+    total += (Math.max(0, shipCrew.length - 1) * crewConfig.cost);
     if (typeof crewPerks !== 'undefined') {
       shipCrew.forEach(c => {
         if (c.perk && c.perk !== 'none') {
@@ -992,7 +992,7 @@ document.getElementById('btn-open-lib').addEventListener('click', () => {
           } else if (item.id === 'crew-manifest' && item.customText) {
              try {
                const parsedCrew = JSON.parse(item.customText);
-               shipPoints += (parsedCrew.length * crewConfig.cost);
+               shipPoints += (Math.max(0, parsedCrew.length - 1) * crewConfig.cost);
                parsedCrew.forEach(c => {
                  if (c.perk && c.perk !== 'none') {
                    const pData = crewPerks.find(p => p.id === c.perk);
