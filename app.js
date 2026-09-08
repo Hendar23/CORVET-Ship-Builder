@@ -443,6 +443,7 @@ function updateDoors() {
   
   const rooms = Array.from(document.querySelectorAll('.room'));
   const connections = new Array(rooms.length).fill(0);
+  const overlaps = new Array(rooms.length).fill(false);
   
   for(let i = 0; i < rooms.length; i++) {
     for(let j = i + 1; j < rooms.length; j++) {
@@ -458,6 +459,12 @@ function updateDoors() {
       const right2 = l2 + r2.offsetWidth;
       const t2 = r2.offsetTop;
       const b2 = t2 + r2.offsetHeight;
+      
+      // Strict overlap check (excludes perfectly adjacent edges)
+      if (l1 < right2 && right1 > l2 && t1 < b2 && b1 > t2) {
+        overlaps[i] = true;
+        overlaps[j] = true;
+      }
       
       if (right1 === l2 || right2 === l1) {
         const overlapTop = Math.max(t1, t2);
@@ -501,7 +508,7 @@ function updateDoors() {
     }
   }
   
-  updateWarnings(rooms, connections);
+  updateWarnings(rooms, connections, overlaps);
 }
 
 function updateZIndices() {
@@ -555,7 +562,7 @@ function updateTargetNumbers() {
   }
 }
 
-function updateWarnings(rooms, connections) {
+function updateWarnings(rooms, connections, overlaps) {
   const warningsDiv = document.getElementById('warnings-container');
   if (!warningsDiv) return;
   
@@ -564,6 +571,8 @@ function updateWarnings(rooms, connections) {
   let overConnectedRooms = false;
   let overConnectedCorridors = false;
   let underConnectedCorridors = false;
+  let hasOverlaps = false;
+  let hasDisconnected = false;
   
   rooms.forEach((r, idx) => {
     const data = roomDatabase.find(db => db.id === r.dataset.id);
@@ -571,13 +580,27 @@ function updateWarnings(rooms, connections) {
     
     let hasError = false;
 
+    // Trigger error if overlapping
+    if (overlaps && overlaps[idx]) {
+      hasError = true;
+      hasOverlaps = true;
+    }
+
+    // Trigger error if completely isolated (ignored if it's the only room)
+    if (connections[idx] === 0 && rooms.length > 1) {
+      hasError = true;
+      hasDisconnected = true;
+    }
+
     if (data.type === 'corridor') {
       corridorCount++;
       if (connections[idx] > data.max_connections) {
         overConnectedCorridors = true;
         hasError = true;
       }
-      if (connections[idx] < 2) {
+      // Only complain about under-connection if it's currently attached to at least 1 thing
+      // (This prevents it throwing both "disconnected" and "under-connected" simultaneously)
+      if (connections[idx] > 0 && connections[idx] < 2) {
         underConnectedCorridors = true;
         hasError = true;
       }
@@ -602,6 +625,12 @@ function updateWarnings(rooms, connections) {
   const requiredCorridors = Math.floor(standardRoomCount / 3);
   const allowedCrew = 1 + Math.ceil(standardRoomCount / crewConfig.roomsPerCrew);
 
+  if (hasOverlaps) {
+    warnings.push("⚠ Rooms cannot overlap");
+  }
+  if (hasDisconnected) {
+    warnings.push("⚠ All rooms must be physically connected");
+  }
   if (corridorCount < requiredCorridors) {
     warnings.push(`⚠️ Not enough corridors (Min ${requiredCorridors} required for ${standardRoomCount} rooms)`);
   }
@@ -1333,4 +1362,97 @@ document.getElementById('btn-close-about').addEventListener('click', () => {
 
 window.addEventListener('click', (e) => {
   if (e.target === aboutModalOverlay) aboutModalOverlay.style.display = 'none';
+});
+
+// --- COMPONENT SHEET PRINTING LOGIC ---
+document.getElementById('btn-print-components').addEventListener('click', () => {
+  const container = document.createElement('div');
+  container.id = 'components-print-container';
+  
+  const wrap = (content) => `<div class="cut-wrapper">${content}</div>`;
+  let html = '';
+  
+  // 1x Combined Status Card (Blank Hull, Shields, Crew)
+  const combinedCardHTML = `
+    <div class="board-ui" style="width: 190px; border: 3px solid #1a1a1a; display: flex; flex-direction: column; background: #ffffff;">
+      <div style="display: flex; justify-content: space-around; align-items: flex-start; padding: 15px 5px 35px 5px; border-bottom: 3px solid #1a1a1a;">
+        <div class="hull-ui" style="position: relative; left: 0; top: 0; box-shadow: none;"><div></div><div class="ui-label">HULL</div></div>
+        <div class="shield-ui" style="position: relative; left: 0; top: 0;">
+          <svg class="shield-svg" viewBox="0 0 100 100" preserveAspectRatio="none"><polygon points="50,5 95,25 95,75 50,95 5,75 5,25"/></svg>
+          <span></span><div class="ui-label">SHIELDS</div>
+        </div>
+      </div>
+      <div class="crew-manifest-ui" style="position: relative; left: 0; top: 0; width: 100%; border: none; box-shadow: none;">
+        <div class="crew-header">Crew Manifest</div>
+        <div class="crew-list" style="padding: 10px;">
+          ${'<div style="border-bottom: 2px dotted #1a1a1a; height: 18px; margin-bottom: 6px;"></div>'.repeat(6)}
+        </div>
+      </div>
+    </div>
+  `;
+  html += wrap(combinedCardHTML);
+
+  // 3x Power Pool
+  const powerPoolHTML = `<div class="board-ui power-pool-ui" style="width: 250px; height: 120px; box-shadow: none; border-color: #1a1a1a;">Power Pool</div>`;
+  for(let i=0; i<3; i++) html += wrap(powerPoolHTML);
+
+  // 3x Speed Track
+  const speedTrackHTML = `
+    <div class="board-ui speed-track-ui" style="width: 50px; box-shadow: none; border-color: #1a1a1a;">
+      <div class="speed-box">SP</div>
+      <div class="speed-box">12</div>
+      <div class="speed-box">10</div>
+      <div class="speed-box">8</div>
+      <div class="speed-box">6</div>
+      <div class="speed-box">4</div>
+      <div class="speed-box">2</div>
+      <div class="speed-box">0</div>
+    </div>
+  `;
+  for(let i=0; i<3; i++) html += wrap(speedTrackHTML);
+
+  // All Rooms and Corridors
+  function generateRoomHTML(roomData) {
+    if (roomData.type === 'corridor') {
+      return `<div class="room" data-id="${roomData.id}" style="width: ${roomData.width}px; height: ${roomData.height}px; box-shadow: none; border-color: #1a1a1a;"></div>`;
+    }
+    
+    let rHtml = `<div class="room" data-id="${roomData.id}" style="width: ${roomData.width}px; height: ${roomData.height}px; box-shadow: none; border-color: #1a1a1a;"><div class="room-inner">`;
+    
+    if (roomData.max_hp !== undefined) {
+      rHtml += `<div class="${roomData.core_category === 'reactor' ? 'reactor-hp-box' : 'hp-box'}">${roomData.max_hp}</div>`;
+    }
+    if (roomData.ammo && roomData.ammo > 0) {
+      rHtml += `<div class="ammo-box">A${roomData.ammo}</div>`;
+    }
+    if (roomData.is_mannable) {
+      rHtml += `<div class="manned-circle"></div>`;
+    }
+    if (roomData.has_arc) {
+      rHtml += `<div class="arc-circle" style="transform: rotate(0deg);"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="48" fill="none" stroke="currentColor" stroke-width="4"/><line x1="16.06" y1="16.06" x2="83.94" y2="83.94" stroke="currentColor" stroke-width="4"/><line x1="16.06" y1="83.94" x2="83.94" y2="16.06" stroke="currentColor" stroke-width="4"/><path d="M50,50 L16.06,16.06 A48,48 0 0,1 83.94,16.06 Z" fill="currentColor" /></svg></div>`;
+    }
+    rHtml += `<div class="room-name">${roomData.name}</div>`;
+    rHtml += `<div class="target-number"></div>`;
+    rHtml += `</div></div>`;
+    return rHtml;
+  }
+  
+  roomDatabase.forEach(room => {
+    html += wrap(generateRoomHTML(room));
+  });
+  
+  container.innerHTML = html;
+  document.body.appendChild(container);
+  
+  // Transition safely to print layout
+  document.documentElement.classList.add('print-components-mode');
+  document.body.classList.add('print-components-mode');
+  
+  // Allow DOM to apply styles, then trigger print, then cleanup
+  setTimeout(() => {
+    window.print();
+    document.body.removeChild(container);
+    document.documentElement.classList.remove('print-components-mode');
+    document.body.classList.remove('print-components-mode');
+  }, 250);
 });
