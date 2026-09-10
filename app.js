@@ -6,6 +6,265 @@ let customRoomsDatabase = [];
 let currentFleet = [];
 let activeFleetShipId = null;
 
+
+const STATE_KEY = 'corvet_state_v2';
+let activeShipId = null;
+let storageRecoveryRequired = false;
+let autosaveRecoveryRequired = false;
+const storedRecoveryData = {};
+const UI_TYPES = new Set(['header', 'points', 'target-die', 'portrait', 'hull', 'shields', 'speed', 'power', 'crew-manifest']);
+
+function newId(prefix = 'ship') {
+  return prefix + '_' + (globalThis.crypto?.randomUUID?.() || Date.now().toString(36) + Math.random().toString(36).slice(2));
+}
+
+function requireData(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
+function validId(value) {
+  return typeof value === 'string' && /^[a-zA-Z0-9_-]{1,160}$/.test(value);
+}
+
+function isSafePortrait(value) {
+  return typeof value === 'string' && /^data:image\/(?:png|jpeg|jpg|gif|webp);base64,[a-zA-Z0-9+/=\r\n]+$/.test(value);
+}
+
+function normalizeCustomRooms(value) {
+  requireData(Array.isArray(value), 'Custom rooms must be a list.');
+  const ids = new Set();
+  return value.map(r => {
+    requireData(r && validId(r.id) && r.id.startsWith('custom_') && !ids.has(r.id), 'Invalid or duplicate custom room ID.');
+    ids.add(r.id);
+    requireData(typeof r.name === 'string' && r.name.length <= 500, 'Invalid custom room name.');
+    for (const key of ['cost', 'width', 'height', 'max_connections', 'max_hp', 'ammo']) {
+      const n = r[key] ?? (key === 'ammo' ? 0 : undefined);
+      requireData(Number.isSafeInteger(n) && n >= (['width', 'height', 'max_hp'].includes(key) ? 1 : 0) && n <= 1000000, 'Invalid custom room ' + key + '.');
+    }
+    return {id:r.id, name:r.name, type:'custom', cost:r.cost, width:r.width, height:r.height,
+      max_connections:r.max_connections, max_hp:r.max_hp, ammo:r.ammo ?? 0,
+      is_mannable:r.is_mannable === true, has_arc:r.has_arc === true, archived:r.archived === true};
+  });
+}
+
+function normalizeLayout(value, database = roomDatabase) {
+  requireData(Array.isArray(value) && value.length > 0 && value.length <= 2000, 'Ship layout must be a non-empty list (maximum 2,000 items).');
+  const seenUI = new Set();
+  return value.map(item => {
+    requireData(item && validId(item.id) && typeof item.isUI === 'boolean', 'Invalid layout item.');
+    const position = key => {
+      const raw = item[key];
+      requireData(typeof raw === 'number' || (typeof raw === 'string' && /^-?\d+(?:\.\d+)?(?:px)?$/.test(raw)), 'Invalid room position.');
+      const n = parseFloat(raw);
+      requireData(Number.isFinite(n) && Math.abs(n) <= 100000, 'Invalid room position.');
+      return Math.round(n) + 'px';
+    };
+    const out = {id:item.id, isUI:item.isUI, left:position('left'), top:position('top'), customText:item.customText ?? null,
+      customClassText:item.customClassText ?? null, arcState:item.arcState ?? null};
+    requireData(out.customText === null || typeof out.customText === 'string', 'Invalid ship text.');
+    requireData(out.customClassText === null || typeof out.customClassText === 'string', 'Invalid ship class.');
+    requireData(out.arcState === null || (Number.isInteger(out.arcState) && out.arcState >= 0 && out.arcState <= 3), 'Invalid firing arc.');
+    if (!out.isUI) {
+      requireData(database.some(r => r.id === out.id), 'Unknown room: ' + out.id + '. Import its custom room definition first.');
+    } else {
+      requireData(UI_TYPES.has(out.id), 'Unknown board element: ' + out.id);
+      requireData(out.id === 'portrait' || !seenUI.has(out.id), 'Duplicate board element: ' + out.id);
+      seenUI.add(out.id);
+      if (out.id === 'hull') requireData(hullDatabase.some(h => h.id === out.customText), 'Unknown hull.');
+      if (out.id === 'shields') requireData(shieldDatabase.some(h => h.id === out.customText), 'Unknown shields.');
+      if (out.id === 'portrait' && out.customText) requireData(isSafePortrait(out.customText), 'Portrait must be a PNG, JPEG, GIF or WebP data image.');
+      if (out.id === 'crew-manifest') {
+        const crew = JSON.parse(out.customText || '[]');
+        requireData(Array.isArray(crew) && crew.length <= 500, 'Crew manifest must be a list.');
+        crew.forEach(c => requireData(c && typeof c.name === 'string' && crewPerks.some(p => p.id === (c.perk || 'none')), 'Invalid crew member or specialisation.'));
+        out.customText = JSON.stringify(crew.map(c => ({name:c.name, perk:c.perk || 'none'})));
+      }
+    }
+    return out;
+  });
+}
+
+function shipSignature(ship) {
+  return JSON.stringify([ship.name, ship.layout]);
+}
+
+function legacyShipId(ship) {
+  // Deterministic migration lets repeated imports of old exports find the same ship.
+  let hash = 2166136261;
+  for (const c of shipSignature(ship)) hash = Math.imul(hash ^ c.charCodeAt(0), 16777619);
+  return 'legacy_' + (hash >>> 0).toString(16);
+}
+
+function normalizeLibrary(value, database = roomDatabase) {
+  requireData(Array.isArray(value), 'Ship library must be a list.');
+  const result = [];
+  for (const ship of value) {
+    requireData(ship && typeof ship.name === 'string' && ship.name.length <= 500, 'Each ship needs a name.');
+    const out = {name:ship.name, layout:normalizeLayout(ship.layout, database)};
+    if (ship.id !== undefined) requireData(validId(ship.id), 'Invalid ship ID.');
+    out.id = ship.id || legacyShipId(out);
+    const existing = result.find(s => s.id === out.id);
+    if (existing && shipSignature(existing) === shipSignature(out)) continue;
+    if (existing) out.id = newId();
+    result.push(out);
+  }
+  return result;
+}
+
+function normalizeFleet(value, library = shipLibrary) {
+  requireData(Array.isArray(value), 'Fleet must be a list.');
+  const ids = new Set();
+  return value.map(f => {
+    requireData(f && (validId(f.shipId) || typeof f.shipName === 'string'), 'Invalid fleet entry.');
+    const ship = f.shipId ? library.find(s => s.id === f.shipId) : library.find(s => s.name === f.shipName);
+    let id = f.id == null ? newId('fleet') : String(f.id);
+    if (ids.has(id)) id = newId('fleet');
+    ids.add(id);
+    return {id, shipId:f.shipId || ship?.id || null, shipName:ship?.name || f.shipName || 'Unknown ship'};
+  });
+}
+
+function readStored(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw !== null) storedRecoveryData[key] = raw;
+    return raw;
+  } catch (e) {
+    storageRecoveryRequired = true;
+    return null;
+  }
+}
+
+function persistState(library = shipLibrary, customRooms = customRoomsDatabase, fleet = currentFleet) {
+  if (storageRecoveryRequired) {
+    alert('Saved data needs recovery before changes can be saved. Use the recovery notice above.');
+    return false;
+  }
+  try {
+    const checkedRooms = normalizeCustomRooms(customRooms);
+    normalizeLibrary(library, [...roomDatabase.filter(r => !r.id.startsWith('custom_')), ...checkedRooms]);
+    normalizeFleet(fleet, library);
+  } catch (e) {
+    alert('Unable to save this data: ' + e.message);
+    return false;
+  }
+  try {
+    // One atomic localStorage write prevents half-imported ships/custom rooms.
+    localStorage.setItem(STATE_KEY, JSON.stringify({schemaVersion:2, corvetLibrary:library, customRooms, fleet}));
+    return true;
+  } catch (e) {
+    alert('Unable to save. Browser storage may be full or unavailable. Export a backup before closing this page.');
+    return false;
+  }
+}
+
+function installCustomRooms(rooms) {
+  customRoomsDatabase = rooms;
+  for (let i = roomDatabase.length - 1; i >= 0; i--) {
+    if (roomDatabase[i].id.startsWith('custom_')) roomDatabase.splice(i, 1);
+  }
+  roomDatabase.push(...rooms);
+}
+
+function loadStoredState() {
+  const raw = readStored(STATE_KEY);
+  const legacy = Object.fromEntries(['corvet_library','corvet_custom_rooms','corvet_fleet'].map(key => [key, readStored(key)]));
+  try {
+    const data = raw !== null ? JSON.parse(raw) : {
+      corvetLibrary:JSON.parse(legacy.corvet_library || '[]'),
+      customRooms:JSON.parse(legacy.corvet_custom_rooms || '[]'),
+      fleet:JSON.parse(legacy.corvet_fleet || '[]')
+    };
+    requireData(data && (raw === null || data.schemaVersion === 2), 'Unsupported saved-data version.');
+    const custom = normalizeCustomRooms(data.customRooms);
+    const database = [...roomDatabase.filter(r => !r.id.startsWith('custom_')), ...custom];
+    const library = normalizeLibrary(data.corvetLibrary, database);
+    const fleet = normalizeFleet(data.fleet, library);
+    installCustomRooms(custom);
+    shipLibrary = library;
+    currentFleet = fleet;
+  } catch (e) {
+    storageRecoveryRequired = true;
+    console.error('Saved data was preserved for recovery:', e);
+  }
+}
+
+function showRecoveryNotice() {
+  if (!storageRecoveryRequired && !autosaveRecoveryRequired) return;
+  const box = document.createElement('div');
+  box.id = 'recovery-notice';
+  box.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:20000;background:#5c2c2c;color:white;padding:12px';
+  const message = document.createElement('p');
+  message.textContent = 'Some saved data could not be loaded. The original data is preserved. Download it before resetting; saving affected data is paused.';
+  const download = document.createElement('button');
+  download.textContent = 'Download saved data';
+  download.onclick = () => downloadJSON(storedRecoveryData, 'corvet-recovery.json');
+  const reset = document.createElement('button');
+  reset.textContent = 'Reset unreadable data';
+  reset.onclick = () => {
+    if (!confirm('Reset the unreadable saved data? Download a recovery copy first.')) return;
+    try {
+      const keys = storageRecoveryRequired ? [STATE_KEY, 'corvet_library', 'corvet_custom_rooms', 'corvet_fleet'] : [];
+      if (autosaveRecoveryRequired) keys.push('corvet_autosave');
+      keys.forEach(key => localStorage.removeItem(key));
+      location.reload();
+    } catch (e) { alert('Browser storage is unavailable. Please enable local storage for this page.'); }
+  };
+  box.append(message, download, reset);
+  document.body.appendChild(box);
+}
+
+function downloadJSON(data, filename) {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {type:'application/json'}));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function mergeLibraryData(data) {
+  requireData(data && (data.schemaVersion === undefined || data.schemaVersion === 2), 'Unsupported backup version.');
+  const custom = normalizeCustomRooms(data.customRooms ?? []);
+  const nextCustom = [...customRoomsDatabase];
+  for (const room of custom) {
+    const existing = nextCustom.find(r => r.id === room.id);
+    requireData(!existing || JSON.stringify({...existing, archived:false}) === JSON.stringify({...room, archived:false}),
+      'A custom room ID has conflicting definitions: ' + room.name);
+    if (!existing) nextCustom.push(room);
+  }
+  const database = [...roomDatabase.filter(r => !r.id.startsWith('custom_')), ...nextCustom];
+  const incoming = normalizeLibrary(data.corvetLibrary, database);
+  const merged = [...shipLibrary];
+  let added = 0;
+  for (const ship of incoming) {
+    if (merged.some(s => shipSignature(s) === shipSignature(ship))) continue;
+    if (merged.some(s => s.id === ship.id)) ship.id = newId();
+    merged.push(ship);
+    added++;
+  }
+  if (!persistState(merged, nextCustom)) return null;
+  shipLibrary = merged;
+  installCustomRooms(nextCustom);
+  refreshRoomMenu();
+  updateFleetDropdown();
+  renderFleetSidebar();
+  return added;
+}
+
+function refreshRoomMenu(selectedId = document.getElementById('room-select').value) {
+  const select = document.getElementById('room-select');
+  select.innerHTML = '';
+  roomDatabase.filter(r => r.type !== 'core' && !r.archived).sort((a,b) => a.name.localeCompare(b.name)).forEach(room => {
+    const option = document.createElement('option');
+    option.value = room.id;
+    option.textContent = `${room.name} (${room.cost} pts)`;
+    select.appendChild(option);
+  });
+  if ([...select.options].some(o => o.value === selectedId)) select.value = selectedId;
+  updateCustomRoomDeleteButton();
+}
+
 // --- SORTING HELPERS ---
 function getShipClass(layout) {
   if (!layout) return "PLEASE RESAVE SHIP";
@@ -78,46 +337,32 @@ function updatePoints() {
   if (boardPoints) boardPoints.textContent = total + " Points";
 }
 
-function loadCustomRoomsFromLocal() {
-  const savedRooms = localStorage.getItem('corvet_custom_rooms');
-  if (savedRooms) {
-    try {
-      customRoomsDatabase = JSON.parse(savedRooms);
-      customRoomsDatabase.forEach(r => {
-        if (!roomDatabase.find(db => db.id === r.id)) {
-          roomDatabase.push(r);
-        }
-      });
-    } catch (e) {
-      console.error("Could not parse saved custom rooms.", e);
-    }
-  }
-}
-
 function init() {
-  loadCustomRoomsFromLocal();
+  loadStoredState();
   populateDropdown();
-  loadLibraryFromLocal();
-  loadFleetFromLocal();
   updateFleetDropdown();
   renderFleetSidebar();
   loadThemePreference();
   
-  const autosave = localStorage.getItem('corvet_autosave');
+  const autosave = readStored('corvet_autosave');
   if (autosave) {
     try {
-      const layoutData = JSON.parse(autosave);
+      const saved = JSON.parse(autosave);
+      const layoutData = normalizeLayout(Array.isArray(saved) ? saved : saved.layout);
       loadShipToWorkspace(layoutData);
+      activeShipId = !Array.isArray(saved) && shipLibrary.some(s => s.id === saved.shipId) ? saved.shipId : null;
     } catch (e) {
+      autosaveRecoveryRequired = true;
       setupDefaultWorkspace();
     }
   } else {
     setupDefaultWorkspace();
   }
+  showRecoveryNotice();
 }
 
 function loadThemePreference() {
-  if (localStorage.getItem('corvet_printer_friendly') === 'true') {
+  if (readStored('corvet_printer_friendly') === 'true') {
     document.body.classList.add('printer-friendly');
   }
   updateThemeButton();
@@ -137,51 +382,34 @@ function updateThemeButton() {
 }
 
 function setupDefaultWorkspace() {
+  activeShipId = null;
   workspace.innerHTML = ''; 
   document.getElementById('ship-name-input').value = 'NEW SHIP';
   document.getElementById('ship-class-input').value = 'CORVETTE';
   shipCrew = [{ name: 'Crewman 1', perk: 'none' }]; 
   setupBoardElements();
   setupCoreRooms();
+  syncDropdownsToBoard();
   updatePoints();
   updateDoors();
   updateTargetNumbers();
   updateZIndices();
-  syncDropdownsToBoard();
   renderCrewSidebar();
 }
 
 function autoSaveWorkspace() {
+  if (storageRecoveryRequired || autosaveRecoveryRequired) return;
   const layoutData = getCurrentLayoutData();
   try {
-    localStorage.setItem('corvet_autosave', JSON.stringify(layoutData));
+    localStorage.setItem('corvet_autosave', JSON.stringify({layout:layoutData, shipId:activeShipId}));
   } catch(e) {
-    console.warn("Storage quota exceeded, unable to autosave.");
-  }
-}
-
-function loadLibraryFromLocal() {
-  const savedData = localStorage.getItem('corvet_library');
-  if (savedData) {
-    try {
-      shipLibrary = JSON.parse(savedData);
-    } catch (e) {
-      console.error("Could not parse saved library.", e);
-    }
-  }
-}
-
-function saveLibraryToLocal() {
-  try {
-    localStorage.setItem('corvet_library', JSON.stringify(shipLibrary));
-  } catch (e) {
-    alert("Storage quota exceeded! Unable to save library. Try removing some custom portrait images.");
+    document.getElementById('warnings-container').textContent = 'Autosave failed. Export or free browser storage before closing this page.';
   }
 }
 
 function populateDropdown() {
   const select = document.getElementById('room-select');
-  const optionalRooms = roomDatabase.filter(r => r.type !== 'core')
+  const optionalRooms = roomDatabase.filter(r => r.type !== 'core' && !r.archived)
     .sort((a, b) => a.name.localeCompare(b.name));
   
   optionalRooms.forEach(room => {
@@ -249,8 +477,8 @@ function createUIElement(type, startX, startY, customText = null, customClassTex
     el.className = 'board-ui ship-header-ui';
     el.id = 'ship-header';
     el.innerHTML = `
-      <div id="ship-name-display" class="ship-name-text">${customText || document.getElementById('ship-name-input').value}</div>
-      <div id="ship-class-display" class="ship-class-text">${customClassText || document.getElementById('ship-class-input').value}</div>
+      <div id="ship-name-display" class="ship-name-text">${escapeHtml(customText ?? document.getElementById('ship-name-input').value)}</div>
+      <div id="ship-class-display" class="ship-class-text">${escapeHtml(customClassText ?? document.getElementById('ship-class-input').value)}</div>
     `;
   } else if (type === 'hull') {
     el.className = 'board-ui hull-ui';
@@ -293,9 +521,10 @@ function createUIElement(type, startX, startY, customText = null, customClassTex
     el.textContent = 'TARGET DIE: D0';
   } else if (type === 'portrait') {
     el.className = 'board-ui portrait-ui';
-    if (customText && customText.startsWith('data:image')) {
+    if (isSafePortrait(customText)) {
       el.classList.add('has-image');
-      el.innerHTML = `<img src="${customText}" /><div class="portrait-placeholder">Double-Click<br>To Add Image</div>`;
+      el.innerHTML = `<img /><div class="portrait-placeholder">Double-Click<br>To Add Image</div>`;
+      el.querySelector('img').src = customText;
     } else {
       el.innerHTML = `<img src="" /><div class="portrait-placeholder">Double-Click<br>To Add Image</div>`;
     }
@@ -307,6 +536,7 @@ function createUIElement(type, startX, startY, customText = null, customClassTex
     deleteBtn.addEventListener('mousedown', (e) => e.stopPropagation());
     deleteBtn.addEventListener('click', () => {
       el.remove();
+      updateDoors();
       autoSaveWorkspace();
     });
     el.appendChild(deleteBtn);
@@ -484,6 +714,8 @@ function makeDraggable(element, shouldSnap = true) {
   };
 
   element.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
     startX = e.clientX;
     startY = e.clientY;
     
@@ -529,6 +761,7 @@ function updateDoors() {
   const rooms = Array.from(workspace.querySelectorAll('.room'));
   const connections = new Array(rooms.length).fill(0);
   const overlaps = new Array(rooms.length).fill(false);
+  const adjacency = rooms.map(() => []);
   
   for(let i = 0; i < rooms.length; i++) {
     for(let j = i + 1; j < rooms.length; j++) {
@@ -568,6 +801,8 @@ function updateDoors() {
           workspace.appendChild(door);
           connections[i]++;
           connections[j]++;
+          adjacency[i].push(j);
+          adjacency[j].push(i);
         }
       }
       
@@ -584,12 +819,23 @@ function updateDoors() {
           workspace.appendChild(door);
           connections[i]++;
           connections[j]++;
+          adjacency[i].push(j);
+          adjacency[j].push(i);
         }
       }
     }
   }
   
-  updateWarnings(rooms, connections, overlaps);
+  const reached = new Set();
+  const root = rooms.findIndex(r => roomDatabase.find(db => db.id === r.dataset.id)?.core_category === 'helm');
+  const pending = rooms.length ? [Math.max(0, root)] : [];
+  while (pending.length) {
+    const index = pending.pop();
+    if (reached.has(index)) continue;
+    reached.add(index);
+    adjacency[index].forEach(next => { if (!reached.has(next)) pending.push(next); });
+  }
+  updateWarnings(rooms, connections, overlaps, reached);
 }
 
 function updateZIndices() {
@@ -608,16 +854,7 @@ function updateTargetNumbers() {
     return data && data.type !== 'corridor';
   });
 
-  rooms.sort((a, b) => {
-    const aTop = parseInt(a.style.top);
-    const bTop = parseInt(b.style.top);
-    if (Math.abs(aTop - bTop) > 20) {
-      return aTop - bTop;
-    }
-    const aLeft = parseInt(a.style.left);
-    const bLeft = parseInt(b.style.left);
-    return aLeft - bLeft;
-  });
+  rooms.sort((a, b) => parseInt(a.style.top) - parseInt(b.style.top) || parseInt(a.style.left) - parseInt(b.style.left));
 
   rooms.forEach((room, index) => {
     const targetEl = room.querySelector('.target-number');
@@ -643,7 +880,7 @@ function updateTargetNumbers() {
   }
 }
 
-function updateWarnings(rooms, connections, overlaps) {
+function updateWarnings(rooms, connections, overlaps, reached = new Set()) {
   const warningsDiv = document.getElementById('warnings-container');
   if (!warningsDiv) return;
   
@@ -666,7 +903,7 @@ function updateWarnings(rooms, connections, overlaps) {
       hasOverlaps = true;
     }
 
-    if (connections[idx] === 0 && rooms.length > 1) {
+    if (!reached.has(idx) && rooms.length > 1) {
       hasError = true;
       hasDisconnected = true;
     }
@@ -697,6 +934,9 @@ function updateWarnings(rooms, connections, overlaps) {
   });
   
   let warnings = [];
+  if (getOutOfBoundsElements().length) warnings.push('⚠ Content is outside the A4 page. Move it inside before printing.');
+  const missingCore = ['helm', 'engine', 'reactor'].filter(category => !rooms.some(r => roomDatabase.find(db => db.id === r.dataset.id)?.core_category === category));
+  if (missingCore.length) warnings.push('⚠ Missing core systems: ' + missingCore.join(', '));
   
   const requiredCorridors = Math.floor(standardRoomCount / 3);
   const allowedCrew = 1 + Math.ceil(standardRoomCount / crewConfig.roomsPerCrew);
@@ -726,52 +966,12 @@ function updateWarnings(rooms, connections, overlaps) {
   warningsDiv.innerHTML = warnings.join('<br>');
 }
 
-function updatePoints() {
-  const rooms = workspace.querySelectorAll('.room');
-  let total = 0;
-  rooms.forEach(r => {
-    const data = roomDatabase.find(db => db.id === r.dataset.id);
-    if (data && data.cost) {
-      total += data.cost;
-    }
-  });
-
-  const hullSelect = document.getElementById('hull-select');
-  if (hullSelect) {
-    const hullData = hullDatabase.find(h => h.id === hullSelect.value);
-    if (hullData && hullData.cost) total += hullData.cost;
-  }
-
-  const shieldSelect = document.getElementById('shield-select');
-  if (shieldSelect) {
-    const shieldData = shieldDatabase.find(s => s.id === shieldSelect.value);
-    if (shieldData && shieldData.cost) total += shieldData.cost;
-  }
-  
-  if (typeof crewConfig !== 'undefined') {
-    total += (Math.max(0, shipCrew.length - 1) * crewConfig.cost);
-    if (typeof crewPerks !== 'undefined') {
-      shipCrew.forEach(c => {
-        if (c.perk && c.perk !== 'none') {
-          const pData = crewPerks.find(p => p.id === c.perk);
-          if (pData) total += pData.cost;
-        }
-      });
-    }
-  }
-
-  const pointsDisplay = document.getElementById('points-total');
-  if(pointsDisplay) pointsDisplay.textContent = 'Total Points: ' + total;
-  
-  const boardPoints = document.getElementById('board-points-display');
-  if (boardPoints) boardPoints.textContent = total + " Points";
-}
-
 document.getElementById('ship-name-input').addEventListener('input', (e) => {
   const display = document.getElementById('ship-name-display');
   if (display) {
     display.textContent = e.target.value;
   }
+  updateDoors();
   autoSaveWorkspace();
 });
 
@@ -780,34 +980,34 @@ document.getElementById('ship-class-input').addEventListener('input', (e) => {
   if (display) {
     display.textContent = e.target.value;
   }
+  updateDoors();
   autoSaveWorkspace();
 });
 
+const PAGE_WIDTH = 210 * 96 / 25.4;
+const PAGE_HEIGHT = 297 * 96 / 25.4;
+
+function getOutOfBoundsElements() {
+  return [...workspace.querySelectorAll('.room, .board-ui')].filter(el => {
+    // Empty portrait placeholders are not printed.
+    if (el.dataset.uiType === 'portrait' && !el.classList.contains('has-image')) return false;
+    const left = parseFloat(el.style.left), top = parseFloat(el.style.top);
+    const width = el.offsetWidth || parseFloat(el.style.width) || 0;
+    const height = el.offsetHeight || parseFloat(el.style.height) || 0;
+    return left < 0 || top < 0 || left + width > PAGE_WIDTH + 0.5 || top + height > PAGE_HEIGHT + 0.5;
+  });
+}
+
 function getEmptySpace(width, height) {
   const els = workspace.querySelectorAll('.room, .board-ui');
-  let startX = 50, startY = 50;
-  let safe = false;
-  
-  while (!safe && startY < 2000) {
-    safe = true;
-    for (let i = 0; i < els.length; i++) {
-      let el = els[i];
-      let elL = el.offsetLeft;
-      let elT = el.offsetTop;
-      let elR = elL + el.offsetWidth;
-      let elB = elT + el.offsetHeight;
-      
-      if (startX < elR && startX + width > elL && startY < elB && startY + height > elT) {
-        safe = false;
-        break;
-      }
-    }
-    if (!safe) {
-      startX += 20;
-      if (startX > 700) { startX = 50; startY += 20; }
+  for (let y = 10; y + height <= PAGE_HEIGHT - 4; y += 10) {
+    for (let x = 10; x + width <= PAGE_WIDTH - 4; x += 10) {
+      const blocked = [...els].some(el => x < el.offsetLeft + el.offsetWidth && x + width > el.offsetLeft &&
+        y < el.offsetTop + el.offsetHeight && y + height > el.offsetTop);
+      if (!blocked) return {x,y};
     }
   }
-  return { x: startX, y: startY };
+  return null;
 }
 
 document.getElementById('btn-add').addEventListener('click', () => {
@@ -816,6 +1016,7 @@ document.getElementById('btn-add').addEventListener('click', () => {
   if (!roomData) return;
   
   const coords = getEmptySpace(roomData.width, roomData.height);
+  if (!coords) { alert('There is no free space on the A4 page. Move or remove an item first.'); return; }
   createRoom(selectedId, coords.x, coords.y); 
   
   updatePoints();
@@ -827,12 +1028,14 @@ document.getElementById('btn-add').addEventListener('click', () => {
 
 document.getElementById('btn-add-image')?.addEventListener('click', () => {
   const coords = getEmptySpace(180, 180); 
+  if (!coords) { alert('There is no free space on the A4 page. Move or remove an item first.'); return; }
   createUIElement('portrait', coords.x, coords.y);
   updateZIndices();
   autoSaveWorkspace();
 });
 
 document.getElementById('btn-print').addEventListener('click', () => {
+  if (getOutOfBoundsElements().length) { alert('Some content is outside the A4 page. Move it inside before printing.'); return; }
   window.print();
 });
 
@@ -855,7 +1058,8 @@ document.getElementById('btn-group-move').addEventListener('click', (e) => {
 document.getElementById('btn-theme').addEventListener('click', () => {
   const body = document.body;
   body.classList.toggle('printer-friendly');
-  localStorage.setItem('corvet_printer_friendly', body.classList.contains('printer-friendly'));
+  try { localStorage.setItem('corvet_printer_friendly', body.classList.contains('printer-friendly')); }
+  catch (e) { alert('The theme changed, but browser storage is unavailable to remember it.'); }
   updateThemeButton();
 });
 
@@ -892,6 +1096,7 @@ document.getElementById('file-portrait').addEventListener('change', (e) => {
       if (window.activePortraitForUpload) {
         window.activePortraitForUpload.classList.add('has-image');
         window.activePortraitForUpload.querySelector('img').src = compressedDataUrl;
+        updateDoors();
         autoSaveWorkspace();
         window.activePortraitForUpload = null; 
       }
@@ -924,8 +1129,8 @@ function getCurrentLayoutData() {
       top: el.style.top,
       customText: el.id === 'ship-header' ? document.getElementById('ship-name-display').textContent : 
                   (el.dataset.uiType === 'portrait' ? customImg : 
-                  (el.dataset.uiType === 'hull' ? document.getElementById('hull-select').value : 
-                  (el.dataset.uiType === 'shields' ? document.getElementById('shield-select').value : 
+                  (el.dataset.uiType === 'hull' ? el.dataset.hullId : 
+                  (el.dataset.uiType === 'shields' ? el.dataset.shieldId : 
                   (el.dataset.uiType === 'crew-manifest' ? JSON.stringify(shipCrew) : null)))),
       customClassText: el.id === 'ship-header' ? document.getElementById('ship-class-display').textContent : null,
       arcState: arcState
@@ -935,6 +1140,7 @@ function getCurrentLayoutData() {
 }
 
 function loadShipToWorkspace(layoutData) {
+  layoutData = normalizeLayout(layoutData);
   workspace.innerHTML = ''; 
   
   const crewData = layoutData.find(item => item.id === 'crew-manifest');
@@ -949,14 +1155,20 @@ function loadShipToWorkspace(layoutData) {
     if (item.isUI) {
       createUIElement(item.id, parseInt(item.left), parseInt(item.top), item.customText, item.customClassText);
       if (item.id === 'header') {
-        if (item.customText) document.getElementById('ship-name-input').value = item.customText;
-        if (item.customClassText) document.getElementById('ship-class-input').value = item.customClassText;
+        document.getElementById('ship-name-input').value = item.customText ?? '';
+        document.getElementById('ship-class-input').value = item.customClassText ?? '';
       }
     } else {
       createRoom(item.id, parseInt(item.left), parseInt(item.top), item.arcState);
     }
   });
   
+  const defaults = [['header',500,20],['points',500,90],['target-die',500,125],['hull',20,20],['shields',110,15],['speed',700,400],['power',20,900],['crew-manifest',20,320]];
+  defaults.forEach(([id,x,y]) => {
+    if (!layoutData.some(i => i.isUI && i.id === id)) createUIElement(id,x,y,id === 'header' ? 'UNTITLED SHIP' : null,id === 'header' ? 'CORVETTE' : null);
+  });
+  document.getElementById('ship-name-input').value = document.getElementById('ship-name-display').textContent;
+  document.getElementById('ship-class-input').value = document.getElementById('ship-class-display').textContent;
   syncDropdownsToBoard();
   updatePoints();
   updateDoors();
@@ -973,71 +1185,51 @@ document.getElementById('btn-new').addEventListener('click', () => {
 });
 
 document.getElementById('btn-save-lib').addEventListener('click', () => {
-  const shipName = document.getElementById('ship-name-input').value;
-  const layout = getCurrentLayoutData();
-  const currentPoints = calculateLayoutCost(layout);
-  
-  const existingIndex = shipLibrary.findIndex(s => s.name === shipName);
-  if (existingIndex >= 0) {
-    if (confirm(`Overwrite existing ship "${shipName}" in library?`)) {
-      shipLibrary[existingIndex] = { name: shipName, layout: layout, points: currentPoints };
-      alert(`Ship "${shipName}" updated.`);
-    }
-  } else {
-    shipLibrary.push({ name: shipName, layout: layout, points: currentPoints });
-    alert(`Ship "${shipName}" saved to library.`);
-  }
-  saveLibraryToLocal();
+  const name = document.getElementById('ship-name-input').value.trim() || 'UNTITLED SHIP';
+  document.getElementById('ship-name-input').value = name;
+  document.getElementById('ship-name-display').textContent = name;
+  let existing = shipLibrary.find(s => s.id === activeShipId);
+  if (!existing) {
+    const matches = shipLibrary.filter(s => s.name === name);
+    if (matches.length === 1 && confirm(`Overwrite existing ship "${name}"? Cancel to save a separate ship.`)) existing = matches[0];
+  } else if (!confirm(`Update saved ship "${existing.name}"?`)) return;
+  const ship = {id:existing?.id || newId(), name, layout:getCurrentLayoutData()};
+  const next = existing ? shipLibrary.map(s => s.id === existing.id ? ship : s) : [...shipLibrary, ship];
+  if (!persistState(next)) return;
+  shipLibrary = next;
+  activeShipId = ship.id;
+  autoSaveWorkspace();
   updateFleetDropdown();
   renderFleetSidebar();
+  alert(`Ship "${name}" saved to library.`);
 });
 
 document.getElementById('btn-export').addEventListener('click', () => {
-  const exportData = {
-    corvetLibrary: shipLibrary,
-    customRooms: customRoomsDatabase
-  };
-  const blob = new Blob([JSON.stringify(exportData, null, 2)], {type: 'application/json'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `corvet_library_${new Date().toISOString().slice(0,10)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadJSON({schemaVersion:2, corvetLibrary:shipLibrary, customRooms:customRoomsDatabase},
+    `corvet_library_${new Date().toISOString().slice(0,10)}.json`);
 });
 
-document.getElementById('btn-merge').addEventListener('click', () => document.getElementById('file-merge').click());document.getElementById('file-merge').addEventListener('change', (e) => {
+document.getElementById('btn-merge').addEventListener('click', () => document.getElementById('file-merge').click());
+document.getElementById('file-merge').addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = (event) => {
+  reader.onload = event => {
     try {
-      const data = JSON.parse(event.target.result);
-      if (data.corvetLibrary) {
-        shipLibrary = [...shipLibrary, ...data.corvetLibrary];
-        saveLibraryToLocal();
-        if (data.customRooms) {
-          data.customRooms.forEach(r => {
-            if (!customRoomsDatabase.find(cr => cr.id === r.id)) {
-              customRoomsDatabase.push(r);
-            }
-          });
-          localStorage.setItem('corvet_custom_rooms', JSON.stringify(customRoomsDatabase));
-        }
-        autoSaveWorkspace();
-        alert(`Merged ${data.corvetLibrary.length} ships into your library. Refreshing to apply custom rooms...`);
-        location.reload();
-      }
-    } catch (err) { alert("Error reading file."); }
+      const added = mergeLibraryData(JSON.parse(event.target.result));
+      if (added !== null) alert(`Added ${added} ships. Identical ships were skipped; different versions were kept separately.`);
+    } catch (err) { alert('Import cancelled. ' + err.message); }
   };
+  reader.onerror = () => alert('Could not read this file. No saved data was changed.');
   reader.readAsText(file);
-  e.target.value = ''; 
+  e.target.value = '';
 });
 
 document.getElementById('btn-wipe').addEventListener('click', () => {
   if (confirm("Are you sure you want to permanently delete all ships in your library? Make sure you have exported a backup first.")) {
+    if (!persistState([])) return;
     shipLibrary = [];
-    saveLibraryToLocal();
+    activeShipId = null;
     updateFleetDropdown();
     renderFleetSidebar();
     alert("Library wiped.");
@@ -1074,6 +1266,7 @@ document.getElementById('btn-open-lib').addEventListener('click', () => {
       btnLoad.onclick = () => {
         if(confirm(`Load "${ship.name}"? Current unsaved board changes will be lost.`)) {
           loadShipToWorkspace(ship.layout);
+          activeShipId = ship.id;
           autoSaveWorkspace(); 
           modal.style.display = 'none';
         }
@@ -1084,9 +1277,10 @@ document.getElementById('btn-open-lib').addEventListener('click', () => {
       btnDelete.textContent = 'Delete';
       btnDelete.onclick = () => {
         if(confirm(`Delete "${ship.name}" from library?`)) {
-          const realIndex = shipLibrary.findIndex(s => s.name === ship.name);
-          shipLibrary.splice(realIndex, 1);
-          saveLibraryToLocal();
+          const next = shipLibrary.filter(s => s.id !== ship.id);
+          if (!persistState(next)) return;
+          shipLibrary = next;
+          if (activeShipId === ship.id) activeShipId = null;
           updateFleetDropdown();
           renderFleetSidebar();
           document.getElementById('btn-open-lib').click(); 
@@ -1107,7 +1301,6 @@ document.getElementById('close-modal').addEventListener('click', () => modal.sty
 document.getElementById('btn-close-modal').addEventListener('click', () => modal.style.display = 'none');
 window.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
 
-init();
 
 function syncDropdownsToBoard() {
   workspace.querySelectorAll('.room').forEach(el => {
@@ -1136,8 +1329,8 @@ function swapCoreRoom(category, selectElementId) {
 
   let left = 320, top = 500, arc = 0; 
   if (currentRoomEl) {
-    left = parseInt(currentRoomEl.style.left) || 320;
-    top = parseInt(currentRoomEl.style.top) || 500;
+    left = parseInt(currentRoomEl.style.left);
+    top = parseInt(currentRoomEl.style.top);
     const arcEl = currentRoomEl.querySelector('.arc-circle');
     if (arcEl) arc = parseInt(arcEl.dataset.arc) || 0;
     currentRoomEl.remove();
@@ -1183,11 +1376,11 @@ document.getElementById('shield-select').addEventListener('change', (e) => {
 function renderCrewOnBoard(el = document.getElementById('board-crew-manifest')) {
   if (!el) return;
   let listHtml = shipCrew.map(c => {
-    let html = `<div>&bull; ${c.name}</div>`;
+    let html = `<div>&bull; ${escapeHtml(c.name)}</div>`;
     if (c.perk && c.perk !== 'none') {
       const perkData = crewPerks.find(p => p.id === c.perk);
       if (perkData) {
-        html += `<div style="font-size: 11px; font-style: italic; font-weight: normal; padding-left: 14px; margin-top: -2px; text-transform: none;">${perkData.name}</div>`;
+        html += `<div style="font-size: 11px; font-style: italic; font-weight: normal; padding-left: 14px; margin-top: -2px; text-transform: none;">${escapeHtml(perkData.name)}</div>`;
       }
     }
     return `<div style="margin-bottom: 4px;">${html}</div>`;
@@ -1224,6 +1417,7 @@ function renderCrewSidebar() {
     input.addEventListener('input', (e) => {
       shipCrew[index].name = e.target.value;
       renderCrewOnBoard();
+      updateDoors();
       autoSaveWorkspace();
     });
     
@@ -1300,7 +1494,7 @@ document.getElementById('btn-save-custom-room').addEventListener('click', () => 
   const ammo = Math.max(0, parseInt(document.getElementById('cr-ammo').value) || 0);
   
   const newRoom = {
-    id: 'custom_' + Date.now(),
+    id: newId('custom'),
     name: name,
     type: 'custom',
     cost: cost,
@@ -1313,27 +1507,12 @@ document.getElementById('btn-save-custom-room').addEventListener('click', () => 
     has_arc: hasArc
   };
   
-  customRoomsDatabase.push(newRoom);
-  roomDatabase.push(newRoom);
-  try {
-    localStorage.setItem('corvet_custom_rooms', JSON.stringify(customRoomsDatabase));
-  } catch(e) {
-    alert("Storage quota exceeded! Unable to save custom room.");
-  }
-  
-  const select = document.getElementById('room-select');
-  select.innerHTML = '';
-  roomDatabase.filter(r => r.type !== 'core')
-    .sort((a, b) => a.name.localeCompare(b.name))
-    .forEach(room => {
-      const option = document.createElement('option');
-      option.value = room.id;
-      option.textContent = `${room.name} (${room.cost} pts)`;
-      select.appendChild(option);
-    });
-  select.value = newRoom.id;
-  
-  updateCustomRoomDeleteButton();
+  let next;
+  try { next = normalizeCustomRooms([...customRoomsDatabase, newRoom]); }
+  catch (e) { alert(e.message); return; }
+  if (!persistState(shipLibrary, next)) return;
+  installCustomRooms(next);
+  refreshRoomMenu(newRoom.id);
   roomModalOverlay.style.display = 'none';
 });
 
@@ -1350,30 +1529,13 @@ document.getElementById('room-select').addEventListener('change', updateCustomRo
 setTimeout(updateCustomRoomDeleteButton, 100);
 
 document.getElementById('btn-delete-custom-room').addEventListener('click', () => {
-  const select = document.getElementById('room-select');
-  const selectedId = select.value;
-  
-  if (selectedId.startsWith('custom_')) {
-    if (confirm("Delete this custom room? Ships in your library using this room will still load it, but it will be removed from your spawn menu.")) {
-      customRoomsDatabase = customRoomsDatabase.filter(r => r.id !== selectedId);
-      localStorage.setItem('corvet_custom_rooms', JSON.stringify(customRoomsDatabase));
-      
-      const dbIndex = roomDatabase.findIndex(r => r.id === selectedId);
-      if (dbIndex > -1) roomDatabase.splice(dbIndex, 1);
-      
-      select.innerHTML = '';
-      roomDatabase.filter(r => r.type !== 'core')
-        .sort((a, b) => a.name.localeCompare(b.name))
-        .forEach(room => {
-          const option = document.createElement('option');
-          option.value = room.id;
-          option.textContent = `${room.name} (${room.cost} pts)`;
-          select.appendChild(option);
-        });
-        
-      updateCustomRoomDeleteButton();
-    }
-  }
+  const selectedId = document.getElementById('room-select').value;
+  if (!selectedId.startsWith('custom_')) return;
+  if (!confirm('Remove this custom room from the menu? Its definition will be kept so saved ships and backups still work.')) return;
+  const next = customRoomsDatabase.map(r => r.id === selectedId ? {...r, archived:true} : r);
+  if (!persistState(shipLibrary, next)) return;
+  installCustomRooms(next);
+  refreshRoomMenu();
 });
 
 // --- ABOUT MODAL LOGIC ---
@@ -1453,43 +1615,19 @@ document.getElementById('btn-print-components').addEventListener('click', () => 
     if (roomData.is_mannable) rHtml += `<div class="manned-circle"></div>`;
     if (roomData.has_arc) rHtml += `<div class="arc-circle" style="transform: rotate(0deg);"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="48" fill="none" stroke="currentColor" stroke-width="4"/><line x1="16.06" y1="16.06" x2="83.94" y2="83.94" stroke="currentColor" stroke-width="4"/><line x1="16.06" y1="83.94" x2="83.94" y2="16.06" stroke="currentColor" stroke-width="4"/><path d="M50,50 L16.06,16.06 A48,48 0 0,1 83.94,16.06 Z" fill="currentColor" /></svg></div>`;
     
-    rHtml += `<div class="room-name">${roomData.name}</div><div class="target-number"></div></div></div>`;
+    rHtml += `<div class="room-name">${escapeHtml(roomData.name)}</div><div class="target-number"></div></div></div>`;
     return rHtml;
   }
   
-  roomDatabase.forEach(room => html += wrap(generateRoomHTML(room)));
+  roomDatabase.filter(room => !room.archived).forEach(room => html += wrap(generateRoomHTML(room)));
   
   container.innerHTML = html;
   document.body.appendChild(container);
   
-  document.documentElement.classList.add('print-components-mode');
-  document.body.classList.add('print-components-mode');
-  
-  setTimeout(() => {
-    window.print();
-    document.body.removeChild(container);
-    document.documentElement.classList.remove('print-components-mode');
-    document.body.classList.remove('print-components-mode');
-  }, 250);
+  printTemporaryContainer(container, 'print-components-mode');
 });
 
 // --- FLEET BUILDER LOGIC ---
-
-function loadFleetFromLocal() {
-  const savedFleet = localStorage.getItem('corvet_fleet');
-  if (savedFleet) {
-    try { currentFleet = JSON.parse(savedFleet); } 
-    catch (e) { currentFleet = []; }
-  }
-}
-
-function saveFleetToLocal() {
-  try {
-    localStorage.setItem('corvet_fleet', JSON.stringify(currentFleet));
-  } catch(e) {
-    alert("Storage quota exceeded! Unable to save fleet.");
-  }
-}
 
 function updateFleetDropdown() {
   const sel = document.getElementById('fleet-ship-select');
@@ -1507,7 +1645,7 @@ function updateFleetDropdown() {
     const pts = getShipPoints(ship);
     
     const opt = document.createElement('option');
-    opt.value = ship.name;
+    opt.value = ship.id;
     opt.textContent = `${ship.name} - ${shipClass} (${pts} pts)`;
     sel.appendChild(opt);
   });
@@ -1527,7 +1665,7 @@ function renderFleetSidebar() {
     if(previewArea) previewArea.innerHTML = '<div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 24px; color: #a19d94; opacity: 0.5;">Select a ship from the fleet to preview</div>';
   } else {
     currentFleet.forEach(fItem => {
-      const ship = shipLibrary.find(s => s.name === fItem.shipName);
+      const ship = shipLibrary.find(s => s.id === fItem.shipId);
       const pts = ship ? getShipPoints(ship) : 0;
       const shipClass = ship ? getShipClass(ship.layout) : 'Unknown';
       totalPts += pts;
@@ -1544,7 +1682,6 @@ function renderFleetSidebar() {
       wrapper.onclick = () => {
          activeFleetShipId = fItem.id;
          renderFleetSidebar(); 
-         if (ship) renderFleetPreview(ship);
       };
       
       let nameHtml = ship ? `<strong>${escapeHtml(ship.name)}</strong><br><span class="fleet-item-meta" style="font-size:12px; color:#a19d94;">${escapeHtml(shipClass)} | ${pts} pts</span>` : `<strong style="color:#ff4444;">Missing: ${escapeHtml(fItem.shipName)}</strong>`;
@@ -1560,12 +1697,13 @@ function renderFleetSidebar() {
       delBtn.title = 'Remove from Fleet';
       delBtn.onclick = (e) => {
         e.stopPropagation(); 
-        currentFleet = currentFleet.filter(f => f.id !== fItem.id);
+        const next = currentFleet.filter(f => f.id !== fItem.id);
+        if (!persistState(shipLibrary, customRoomsDatabase, next)) return;
+        currentFleet = next;
         if (activeFleetShipId === fItem.id) {
            activeFleetShipId = null;
            if(previewArea) previewArea.innerHTML = '<div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 24px; color: #a19d94; opacity: 0.5;">Select a ship from the fleet to preview</div>';
         }
-        saveFleetToLocal();
         renderFleetSidebar();
       };
       
@@ -1575,26 +1713,62 @@ function renderFleetSidebar() {
     });
   }
   totalDisplay.textContent = `Fleet Total: ${totalPts} pts`;
+  if (activeFleetShipId) {
+    const item = currentFleet.find(f => f.id === activeFleetShipId);
+    const ship = item && shipLibrary.find(s => s.id === item.shipId);
+    if (ship) renderFleetPreview(ship);
+    else if (previewArea) previewArea.textContent = 'This ship is missing from the library.';
+  }
+}
+
+function withShipLayout(layout, callback) {
+  const nodes = [...workspace.childNodes];
+  const savedCrew = shipCrew;
+  const controls = ['ship-name-input','ship-class-input','hull-select','shield-select','reactor-select','engine-select','helm-select'];
+  const values = controls.map(id => document.getElementById(id).value);
+  const warnings = document.getElementById('warnings-container').innerHTML;
+  const points = document.getElementById('points-total').textContent;
+  const builder = document.getElementById('builder-screen');
+  const css = builder.style.cssText;
+  workspace.replaceChildren();
+  try {
+    builder.style.display = 'flex';
+    builder.style.position = 'absolute';
+    builder.style.visibility = 'hidden';
+    loadShipToWorkspace(layout);
+    return callback();
+  } finally {
+    workspace.replaceChildren(...nodes);
+    shipCrew = savedCrew;
+    controls.forEach((id, i) => document.getElementById(id).value = values[i]);
+    document.getElementById('warnings-container').innerHTML = warnings;
+    document.getElementById('points-total').textContent = points;
+    builder.style.cssText = css;
+    renderCrewSidebar();
+  }
+}
+
+function cloneBoard() {
+  const clone = workspace.cloneNode(true);
+  clone.removeAttribute('id');
+  clone.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
+  return [...clone.childNodes];
 }
 
 function renderFleetPreview(ship) {
-   const previewArea = document.getElementById('fleet-workspace');
-   if (!previewArea) return;
-   
-   const activeLayout = getCurrentLayoutData(); 
-   loadShipToWorkspace(ship.layout); 
-   // The \s ensures it only strips the standalone 'id' attribute, protecting 'data-id'
-   previewArea.innerHTML = workspace.innerHTML.replace(/\sid="[^"]+"/g, ''); 
-   loadShipToWorkspace(activeLayout); 
+  const previewArea = document.getElementById('fleet-workspace');
+  if (!previewArea) return;
+  try { withShipLayout(ship.layout, () => previewArea.replaceChildren(...cloneBoard())); }
+  catch (e) { previewArea.textContent = 'Unable to preview ship: ' + e.message; }
 }
 
 document.getElementById('btn-add-to-fleet').addEventListener('click', () => {
-  const sel = document.getElementById('fleet-ship-select');
-  if (sel.value && sel.value !== 'Library is empty') {
-    currentFleet.push({ id: Date.now() + Math.random(), shipName: sel.value });
-    saveFleetToLocal();
-    renderFleetSidebar();
-  }
+  const ship = shipLibrary.find(s => s.id === document.getElementById('fleet-ship-select').value);
+  if (!ship) return;
+  const next = [...currentFleet, {id:newId('fleet'), shipId:ship.id, shipName:ship.name}];
+  if (!persistState(shipLibrary, customRoomsDatabase, next)) return;
+  currentFleet = next;
+  renderFleetSidebar();
 });
 
 document.getElementById('btn-toggle-fleet').addEventListener('click', () => {
@@ -1609,38 +1783,40 @@ document.getElementById('btn-back-builder').addEventListener('click', () => {
 });
 
 document.getElementById('btn-print-fleet').addEventListener('click', () => {
-  if(currentFleet.length === 0) {
-    alert("Your fleet is empty.");
-    return;
-  }
-  
+  if (!currentFleet.length) { alert('Your fleet is empty.'); return; }
   const container = document.createElement('div');
   container.id = 'fleet-print-container';
-  
-  const activeLayout = getCurrentLayoutData();
-  let html = '';
-  
-  currentFleet.forEach(fItem => {
-    const ship = shipLibrary.find(s => s.name === fItem.shipName);
-    if (ship) {
-      loadShipToWorkspace(ship.layout);
-      const pageHTML = `<div class="fleet-page">${workspace.innerHTML}</div>`;
-      html += pageHTML;
+  try {
+    for (const item of currentFleet) {
+      const ship = shipLibrary.find(s => s.id === item.shipId);
+      if (!ship) throw new Error('A fleet ship is missing. Remove the missing entry or restore its ship.');
+      withShipLayout(ship.layout, () => {
+        if (getOutOfBoundsElements().length) throw new Error(ship.name + ' has content outside the A4 page. Fix its layout before printing.');
+        const page = document.createElement('div');
+        page.className = 'fleet-page';
+        page.append(...cloneBoard());
+        container.appendChild(page);
+      });
     }
-  });
-  
-  loadShipToWorkspace(activeLayout);
-  
-  container.innerHTML = html;
+  } catch (e) { alert(e.message); return; }
   document.body.appendChild(container);
-  
-  document.documentElement.classList.add('print-fleet-mode');
-  document.body.classList.add('print-fleet-mode');
-  
-  setTimeout(() => {
-    window.print();
-    document.body.removeChild(container);
-    document.documentElement.classList.remove('print-fleet-mode');
-    document.body.classList.remove('print-fleet-mode');
-  }, 500); 
+  printTemporaryContainer(container, 'print-fleet-mode');
 });
+
+function printTemporaryContainer(container, mode) {
+  document.documentElement.classList.add(mode);
+  document.body.classList.add(mode);
+  const cleanup = () => {
+    container.remove();
+    document.documentElement.classList.remove(mode);
+    document.body.classList.remove(mode);
+    window.removeEventListener('afterprint', cleanup);
+  };
+  window.addEventListener('afterprint', cleanup);
+  setTimeout(() => {
+    try { window.print(); }
+    catch (e) { cleanup(); alert('Printing could not start.'); }
+  }, 500);
+}
+
+init();

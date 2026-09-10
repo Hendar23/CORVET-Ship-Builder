@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CORVET Ship Builder</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap');
@@ -125,7 +126,8 @@
       margin: 20px;
       box-shadow: 0 10px 30px rgba(0,0,0,0.5);
       overflow: visible;
-      isolation: isolate; 
+      isolation: isolate;
+      flex-shrink: 0;
     }
     
     #fleet-workspace {
@@ -426,7 +428,7 @@
       html.print-components-mode, body.print-components-mode, html.print-fleet-mode, body.print-fleet-mode { width: auto !important; height: auto !important; overflow: visible !important; }
       
       /* Hide sidebars and inactive screens for normal printing */
-      #sidebar, #right-sidebar, #fleet-sidebar, #fleet-screen, #modal-overlay, #room-modal-overlay, #about-modal-overlay { display: none !important; }      
+      #recovery-notice, #sidebar, #right-sidebar, #fleet-sidebar, #fleet-screen, #modal-overlay, #room-modal-overlay, #about-modal-overlay { display: none !important; }      
       
       /* Hide the builder screen entirely ONLY during specialized multi-page prints */
       body.print-components-mode #builder-screen, body.print-fleet-mode #builder-screen { display: none !important; }
@@ -464,7 +466,7 @@
         <label for="room-select" style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Select Room:</label>
         <div style="display: flex; gap: 5px; margin-top: 5px; max-width: 240px;">
           <select id="room-select" style="flex-grow: 1; min-width: 0; width: 100%;"></select>
-          <button id="btn-delete-custom-room" class="btn-danger" style="display: none; font-weight: bold; padding: 0 10px; flex-shrink: 0;" title="Delete Custom Room">&times;</button>
+          <button id="btn-delete-custom-room" class="btn-danger" style="display: none; font-weight: bold; padding: 0 10px; flex-shrink: 0;" title="Remove Custom Room from Menu">&times;</button>
         </div>
       </div>
       <button id="btn-add" style="font-weight: bold; text-transform: uppercase; width: 100%; margin-bottom: 8px; margin-top: 5px; background: #4a7c82; color: white; border: 1px solid #1a1a1a; font-size: 16px; padding: 10px;">Add Room</button>
