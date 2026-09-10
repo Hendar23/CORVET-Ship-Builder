@@ -197,8 +197,7 @@
       animation: pulse-error-border 1.5s infinite;
       z-index: 9500; 
     }
-    [data-id^="corridor_curve"].error-highlight,
-    [data-id="corridor_cross"].error-highlight {
+    [data-id^="corridor_curve"].error-highlight {
       animation: pulse-error-filter 1.5s infinite !important;
     }
     body.printer-friendly .room.error-highlight {
@@ -225,16 +224,7 @@
     [data-id="corridor_curve_nw"] { background: radial-gradient(circle at bottom right, transparent 17px, #1a1a1a 17px, #1a1a1a 20px, #ffffff 20px, #ffffff 87px, #1a1a1a 87px, #1a1a1a 90px, transparent 90px); }
     [data-id="corridor_curve_se"] { background: radial-gradient(circle at top left, transparent 17px, #1a1a1a 17px, #1a1a1a 20px, #ffffff 20px, #ffffff 87px, #1a1a1a 87px, #1a1a1a 90px, transparent 90px); }
     [data-id="corridor_curve_sw"] { background: radial-gradient(circle at top right, transparent 17px, #1a1a1a 17px, #1a1a1a 20px, #ffffff 20px, #ffffff 87px, #1a1a1a 87px, #1a1a1a 90px, transparent 90px); }
-    [data-id="corridor_cross"] {
-      clip-path: polygon(10px 0, 80px 0, 80px 10px, 90px 10px, 90px 80px, 80px 80px, 80px 90px, 10px 90px, 10px 80px, 0 80px, 0 10px, 10px 10px);
-      box-shadow: none !important;
-      filter: drop-shadow(4px 4px 0px #c05c3d);
-    }
-    [data-id="corridor_cross"].dragging {
-      filter: drop-shadow(6px 6px 0px #c05c3d);
-    }
-    [data-id^="corridor_curve"] .room-name, 
-    [data-id="corridor_cross"] .room-name {
+    [data-id^="corridor_curve"] .room-name {
       display: none;
     }
     
@@ -348,8 +338,7 @@
     body.printer-friendly .target-number::before, body.printer-friendly .target-number::after { border-color: #000000 !important; }    
     body.printer-friendly #workspace, body.printer-friendly #fleet-workspace { background-color: #ffffff !important; background-image: none !important; box-shadow: none !important; }
     body.printer-friendly .room, body.printer-friendly .hull-ui, body.printer-friendly .power-pool-ui, body.printer-friendly .speed-track-ui { border-color: #000000 !important; background-color: #ffffff !important; box-shadow: none !important; filter: none !important; }
-    body.printer-friendly [data-id^="corridor_curve"], body.printer-friendly [data-id="corridor_cross"] { background-color: transparent !important; filter: drop-shadow(4px 4px 0px #000000) !important; }
-    body.printer-friendly [data-id="corridor_curve_ne"] { background: radial-gradient(circle at bottom left, transparent 17px, #000000 17px, #000000 20px, #ffffff 20px, #ffffff 87px, #000000 87px, #000000 90px, transparent 90px) !important; }
+    body.printer-friendly [data-id^="corridor_curve"] { background-color: transparent !important; filter: drop-shadow(4px 4px 0px #000000) !important; }    body.printer-friendly [data-id="corridor_curve_ne"] { background: radial-gradient(circle at bottom left, transparent 17px, #000000 17px, #000000 20px, #ffffff 20px, #ffffff 87px, #000000 87px, #000000 90px, transparent 90px) !important; }
     body.printer-friendly [data-id="corridor_curve_nw"] { background: radial-gradient(circle at bottom right, transparent 17px, #000000 17px, #000000 20px, #ffffff 20px, #ffffff 87px, #000000 87px, #000000 90px, transparent 90px) !important; }
     body.printer-friendly [data-id="corridor_curve_se"] { background: radial-gradient(circle at top left, transparent 17px, #000000 17px, #000000 20px, #ffffff 20px, #ffffff 87px, #000000 87px, #000000 90px, transparent 90px) !important; }
     body.printer-friendly [data-id="corridor_curve_sw"] { background: radial-gradient(circle at top right, transparent 17px, #000000 17px, #000000 20px, #ffffff 20px, #ffffff 87px, #000000 87px, #000000 90px, transparent 90px) !important; }
@@ -426,8 +415,7 @@
     body.print-components-mode .board-ui { box-shadow: none !important; }
     body.print-components-mode [data-id^="corridor_curve"],
     body.print-components-mode .shield-svg { filter: none !important; }
-    body.print-components-mode [data-id="corridor_cross"] { filter: drop-shadow(2px 2px 0px #1a1a1a) !important; }
-
+    
     /* Print Output Control */
     @media print {
       @page { size: A4 portrait; margin: 0 !important; }

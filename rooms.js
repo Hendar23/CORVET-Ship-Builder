@@ -84,7 +84,7 @@ const roomDatabase = [
     },
     {
         id: "corridor_h",
-        name: "Corridor Horizontal ",
+        name: "Corridor Horizontal",
         type: "corridor",
         cost: 0,
         width: 180,
@@ -93,7 +93,7 @@ const roomDatabase = [
     },
     {
         id: "corridor_h_s",
-        name: "Corridor Short Hor ",
+        name: "Corridor Short Hor",
         type: "corridor",
         cost: 0,
         width: 90,

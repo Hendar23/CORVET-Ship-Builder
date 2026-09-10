@@ -25,34 +25,57 @@ function getSortedLibrary() {
   });
 }
 
-function getShipPoints(ship) {
-  if (ship.points !== undefined) return ship.points;
-  
-  let shipPoints = 0;
-  ship.layout.forEach(item => {
+function escapeHtml(unsafe) {
+  return (unsafe || "").toString()
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function calculateLayoutCost(layout) {
+  if (!layout) return 0;
+  let total = 0;
+  layout.forEach(item => {
     if (!item.isUI) {
       const roomData = roomDatabase.find(db => db.id === item.id);
-      if (roomData && roomData.cost) shipPoints += roomData.cost;
+      if (roomData && roomData.cost) total += roomData.cost;
     } else if (item.id === 'hull' && item.customText) {
       const hullData = hullDatabase.find(h => h.id === item.customText);
-      if (hullData && hullData.cost) shipPoints += hullData.cost;
+      if (hullData && hullData.cost) total += hullData.cost;
     } else if (item.id === 'shields' && item.customText) {
       const shieldData = shieldDatabase.find(s => s.id === item.customText);
-      if (shieldData && shieldData.cost) shipPoints += shieldData.cost;
+      if (shieldData && shieldData.cost) total += shieldData.cost;
     } else if (item.id === 'crew-manifest' && item.customText) {
        try {
          const parsedCrew = JSON.parse(item.customText);
-         shipPoints += (Math.max(0, parsedCrew.length - 1) * crewConfig.cost);
+         total += (Math.max(0, parsedCrew.length - 1) * crewConfig.cost);
          parsedCrew.forEach(c => {
            if (c.perk && c.perk !== 'none') {
              const pData = crewPerks.find(p => p.id === c.perk);
-             if (pData) shipPoints += pData.cost;
+             if (pData) total += pData.cost;
            }
          });
        } catch(e) {}
     }
   });
-  return shipPoints;
+  return total;
+}
+
+function getShipPoints(ship) {
+  // Always calculate dynamically to prevent stale points after rebalancing room costs
+  return calculateLayoutCost(ship.layout);
+}
+function updatePoints() {
+  const currentLayout = getCurrentLayoutData();
+  const total = calculateLayoutCost(currentLayout);
+
+  const pointsDisplay = document.getElementById('points-total');
+  if (pointsDisplay) pointsDisplay.textContent = 'Total Points: ' + total;
+  
+  const boardPoints = document.getElementById('board-points-display');
+  if (boardPoints) boardPoints.textContent = total + " Points";
 }
 
 function loadCustomRoomsFromLocal() {
@@ -130,7 +153,11 @@ function setupDefaultWorkspace() {
 
 function autoSaveWorkspace() {
   const layoutData = getCurrentLayoutData();
-  localStorage.setItem('corvet_autosave', JSON.stringify(layoutData));
+  try {
+    localStorage.setItem('corvet_autosave', JSON.stringify(layoutData));
+  } catch(e) {
+    console.warn("Storage quota exceeded, unable to autosave.");
+  }
 }
 
 function loadLibraryFromLocal() {
@@ -145,7 +172,11 @@ function loadLibraryFromLocal() {
 }
 
 function saveLibraryToLocal() {
-  localStorage.setItem('corvet_library', JSON.stringify(shipLibrary));
+  try {
+    localStorage.setItem('corvet_library', JSON.stringify(shipLibrary));
+  } catch (e) {
+    alert("Storage quota exceeded! Unable to save library. Try removing some custom portrait images.");
+  }
 }
 
 function populateDropdown() {
@@ -944,7 +975,7 @@ document.getElementById('btn-new').addEventListener('click', () => {
 document.getElementById('btn-save-lib').addEventListener('click', () => {
   const shipName = document.getElementById('ship-name-input').value;
   const layout = getCurrentLayoutData();
-  const currentPoints = parseInt(document.getElementById('points-total').textContent.replace('Total Points: ', '')) || 0;
+  const currentPoints = calculateLayoutCost(layout);
   
   const existingIndex = shipLibrary.findIndex(s => s.name === shipName);
   if (existingIndex >= 0) {
@@ -1033,8 +1064,7 @@ document.getElementById('btn-open-lib').addEventListener('click', () => {
       item.className = 'library-item';
       
       const title = document.createElement('div');
-      title.innerHTML = `<strong style="font-size: 16px; color: #1a1a1a;">${ship.name}</strong><br><span style="font-size:12px; color:#4a7c82; font-weight:bold; text-transform:uppercase;">${shipClass}</span><br><span style="font-size:12px; color:#888;">${shipPoints} Points</span>`;
-      
+      title.innerHTML = `<strong style="font-size: 16px; color: #1a1a1a;">${escapeHtml(ship.name)}</strong><br><span style="font-size:12px; color:#4a7c82; font-weight:bold; text-transform:uppercase;">${escapeHtml(shipClass)}</span><br><span style="font-size:12px; color:#888;">${shipPoints} Points</span>`;      
       const actions = document.createElement('div');
       actions.className = 'library-item-actions';
       
@@ -1263,11 +1293,11 @@ window.addEventListener('click', (e) => {
 
 document.getElementById('btn-save-custom-room').addEventListener('click', () => {
   const name = document.getElementById('cr-name').value || 'Custom Room';
-  const cost = parseInt(document.getElementById('cr-cost').value) || 0;
-  const hp = parseInt(document.getElementById('cr-hp').value) || 1;
+  const cost = Math.max(0, parseInt(document.getElementById('cr-cost').value) || 0);
+  const hp = Math.max(1, parseInt(document.getElementById('cr-hp').value) || 1);
   const isMannable = document.getElementById('cr-mannable').checked;
   const hasArc = document.getElementById('cr-arc').checked;
-  const ammo = parseInt(document.getElementById('cr-ammo').value) || 0;
+  const ammo = Math.max(0, parseInt(document.getElementById('cr-ammo').value) || 0);
   
   const newRoom = {
     id: 'custom_' + Date.now(),
@@ -1285,7 +1315,11 @@ document.getElementById('btn-save-custom-room').addEventListener('click', () => 
   
   customRoomsDatabase.push(newRoom);
   roomDatabase.push(newRoom);
-  localStorage.setItem('corvet_custom_rooms', JSON.stringify(customRoomsDatabase));
+  try {
+    localStorage.setItem('corvet_custom_rooms', JSON.stringify(customRoomsDatabase));
+  } catch(e) {
+    alert("Storage quota exceeded! Unable to save custom room.");
+  }
   
   const select = document.getElementById('room-select');
   select.innerHTML = '';
@@ -1450,7 +1484,11 @@ function loadFleetFromLocal() {
 }
 
 function saveFleetToLocal() {
-  localStorage.setItem('corvet_fleet', JSON.stringify(currentFleet));
+  try {
+    localStorage.setItem('corvet_fleet', JSON.stringify(currentFleet));
+  } catch(e) {
+    alert("Storage quota exceeded! Unable to save fleet.");
+  }
 }
 
 function updateFleetDropdown() {
@@ -1509,7 +1547,7 @@ function renderFleetSidebar() {
          if (ship) renderFleetPreview(ship);
       };
       
-      let nameHtml = ship ? `<strong>${ship.name}</strong><br><span class="fleet-item-meta" style="font-size:12px; color:#a19d94;">${shipClass} | ${pts} pts</span>` : `<strong style="color:#ff4444;">Missing: ${fItem.shipName}</strong>`;
+      let nameHtml = ship ? `<strong>${escapeHtml(ship.name)}</strong><br><span class="fleet-item-meta" style="font-size:12px; color:#a19d94;">${escapeHtml(shipClass)} | ${pts} pts</span>` : `<strong style="color:#ff4444;">Missing: ${escapeHtml(fItem.shipName)}</strong>`;
       
       const nameDiv = document.createElement('div');
       nameDiv.innerHTML = nameHtml;
@@ -1545,7 +1583,8 @@ function renderFleetPreview(ship) {
    
    const activeLayout = getCurrentLayoutData(); 
    loadShipToWorkspace(ship.layout); 
-   previewArea.innerHTML = workspace.innerHTML.replace(/id="[^"]+"/g, ''); 
+   // The \s ensures it only strips the standalone 'id' attribute, protecting 'data-id'
+   previewArea.innerHTML = workspace.innerHTML.replace(/\sid="[^"]+"/g, ''); 
    loadShipToWorkspace(activeLayout); 
 }
 
