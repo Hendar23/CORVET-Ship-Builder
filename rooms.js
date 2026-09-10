@@ -7,7 +7,7 @@ const crewPerks = [
     {
         id: "none",
         name: "No Perk",
-        cost: 5
+        cost: 0
     },
     {
         id: "pilot",
@@ -68,7 +68,7 @@ const roomDatabase = [
         id: "corridor_v",
         name: "Corridor Vertical",
         type: "corridor",
-        cost: 5,
+        cost: 0,
         width: 70,
         height: 180,
         max_connections: 4
@@ -77,7 +77,7 @@ const roomDatabase = [
         id: "corridor_v_s",
         name: "Corridor Short Vert",
         type: "corridor",
-        cost: 5,
+        cost: 0,
         width: 70,
         height: 90,
         max_connections: 4
@@ -86,7 +86,7 @@ const roomDatabase = [
         id: "corridor_h",
         name: "Corridor Horizontal ",
         type: "corridor",
-        cost: 5,
+        cost: 0,
         width: 180,
         height: 70,
         max_connections: 4
@@ -95,7 +95,7 @@ const roomDatabase = [
         id: "corridor_h_s",
         name: "Corridor Short Hor ",
         type: "corridor",
-        cost: 5,
+        cost: 0,
         width: 90,
         height: 70,
         max_connections: 4
@@ -104,7 +104,7 @@ const roomDatabase = [
         id: "corridor_curve_ne",
         name: "Corridor Curve NE",
         type: "corridor",
-        cost: 5,
+        cost: 0,
         width: 90,
         height: 90,
         max_connections: 2
@@ -113,7 +113,7 @@ const roomDatabase = [
         id: "corridor_curve_nw",
         name: "Corridor Curve NW",
         type: "corridor",
-        cost: 5,
+        cost: 0,
         width: 90,
         height: 90,
         max_connections: 2
@@ -122,7 +122,7 @@ const roomDatabase = [
         id: "corridor_curve_se",
         name: "Corridor Curve SE",
         type: "corridor",
-        cost: 5,
+        cost: 0,
         width: 90,
         height: 90,
         max_connections: 2
@@ -131,7 +131,7 @@ const roomDatabase = [
         id: "corridor_curve_sw",
         name: "Corridor Curve SW",
         type: "corridor",
-        cost: 5,
+        cost: 0,
         width: 90,
         height: 90,
         max_connections: 2
@@ -140,7 +140,7 @@ const roomDatabase = [
         id: "corridor_circle",
         name: "Corridor Hub",
         type: "corridor",
-        cost: 5,
+        cost: 0,
         width: 130,
         height: 130,
         max_connections: 4
