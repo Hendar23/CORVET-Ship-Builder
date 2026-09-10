@@ -10,13 +10,23 @@
       font-family: 'Space Mono', monospace;
       background: #232220;
       color: white;
-      display: flex;
       margin: 0;
       min-height: 100vh;
+      display: flex;
     }
+    
+    #builder-screen {
+      display: flex;
+      width: 100%;
+    }
+    
+    #fleet-screen {
+      display: none;
+      width: 100%;
+    }
+
     #sidebar {
-      min-width: 280px;
-      width: max-content;
+      width: 320px;
       padding: 20px;
       background: #171615;
       border-right: 2px solid #3a3835;
@@ -33,8 +43,7 @@
       flex-shrink: 0;
     }
     #right-sidebar {
-      min-width: 280px;
-      width: max-content;
+      width: 320px;
       padding: 20px;
       background: #171615;
       border-left: 2px solid #3a3835;
@@ -50,6 +59,29 @@
       box-sizing: border-box;
       flex-shrink: 0;
     }
+    
+    /* Fleet Sidebar specific styling */
+    #fleet-sidebar {
+      width: 320px;
+      padding: 20px;
+      background: #171615;
+      border-right: 2px solid #3a3835;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      z-index: 50;
+      overflow-x: hidden;
+      overflow-y: auto;
+      height: 100vh;
+      box-sizing: border-box;
+      flex-shrink: 0;
+    }
+
+    .fleet-item { cursor: pointer; transition: background 0.1s; }
+    .fleet-item:hover { background: #3a3733 !important; }
+    .fleet-item.active { background: #4a7c82 !important; border-color: #1a1a1a !important; color: white !important; }
+    .fleet-item.active .fleet-item-meta { color: #e0dcd3 !important; }
+
     button, select, input[type="text"] {
       font-family: inherit; 
       padding: 8px;
@@ -95,6 +127,26 @@
       overflow: visible;
       isolation: isolate; 
     }
+    
+    #fleet-workspace {
+      position: relative;
+      width: 210mm; 
+      height: 297mm;
+      background-color: #f0ebe1; 
+      background-image: 
+        linear-gradient(#dbd6cc 1px, transparent 1px),
+        linear-gradient(90deg, #dbd6cc 1px, transparent 1px);
+      background-size: 10px 10px; 
+      margin: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      overflow: visible;
+      isolation: isolate; 
+      pointer-events: none; /* Enforces read-only state */
+      flex-shrink: 0;
+    }
+    
+    #fleet-workspace .btn-delete-room { display: none !important; }
+    #fleet-workspace .portrait-placeholder { display: none !important; }
 
     .target-number {
       position: absolute; bottom: 44px; right: 5px;
@@ -158,49 +210,29 @@
 
     /* --- Custom Room Shapes --- */
     [data-id="corridor_circle"] {
-      /* 130px room: 30px curves leave exactly 70px flat on all sides to connect cleanly */
       border-radius: 30px; 
     }
-    
     [data-id^="corridor_curve"] {
-      background-color: transparent !important; /* Removes white corners */
+      background-color: transparent !important;
       border: none;
       box-shadow: none !important;
-      filter: drop-shadow(4px 4px 0px #c05c3d); /* Perfectly traces the transparent gradient */
+      filter: drop-shadow(4px 4px 0px #c05c3d);
     }
-    
     [data-id^="corridor_curve"].dragging {
       filter: drop-shadow(6px 6px 0px #c05c3d);
     }
-    
-    [data-id="corridor_curve_ne"] {
-      background: radial-gradient(circle at bottom left, transparent 17px, #1a1a1a 17px, #1a1a1a 20px, #ffffff 20px, #ffffff 87px, #1a1a1a 87px, #1a1a1a 90px, transparent 90px);
-    }
-    
-    [data-id="corridor_curve_nw"] {
-      background: radial-gradient(circle at bottom right, transparent 17px, #1a1a1a 17px, #1a1a1a 20px, #ffffff 20px, #ffffff 87px, #1a1a1a 87px, #1a1a1a 90px, transparent 90px);
-    }
-    
-    [data-id="corridor_curve_se"] {
-      background: radial-gradient(circle at top left, transparent 17px, #1a1a1a 17px, #1a1a1a 20px, #ffffff 20px, #ffffff 87px, #1a1a1a 87px, #1a1a1a 90px, transparent 90px);
-    }
-    
-    [data-id="corridor_curve_sw"] {
-      background: radial-gradient(circle at top right, transparent 17px, #1a1a1a 17px, #1a1a1a 20px, #ffffff 20px, #ffffff 87px, #1a1a1a 87px, #1a1a1a 90px, transparent 90px);
-    }
-    
+    [data-id="corridor_curve_ne"] { background: radial-gradient(circle at bottom left, transparent 17px, #1a1a1a 17px, #1a1a1a 20px, #ffffff 20px, #ffffff 87px, #1a1a1a 87px, #1a1a1a 90px, transparent 90px); }
+    [data-id="corridor_curve_nw"] { background: radial-gradient(circle at bottom right, transparent 17px, #1a1a1a 17px, #1a1a1a 20px, #ffffff 20px, #ffffff 87px, #1a1a1a 87px, #1a1a1a 90px, transparent 90px); }
+    [data-id="corridor_curve_se"] { background: radial-gradient(circle at top left, transparent 17px, #1a1a1a 17px, #1a1a1a 20px, #ffffff 20px, #ffffff 87px, #1a1a1a 87px, #1a1a1a 90px, transparent 90px); }
+    [data-id="corridor_curve_sw"] { background: radial-gradient(circle at top right, transparent 17px, #1a1a1a 17px, #1a1a1a 20px, #ffffff 20px, #ffffff 87px, #1a1a1a 87px, #1a1a1a 90px, transparent 90px); }
     [data-id="corridor_cross"] {
-      /* Trims 10px from all corners to create 70px wide arms */
       clip-path: polygon(10px 0, 80px 0, 80px 10px, 90px 10px, 90px 80px, 80px 80px, 80px 90px, 10px 90px, 10px 80px, 0 80px, 0 10px, 10px 10px);
-      box-shadow: none !important; /* Turn off standard box shadow as it breaks on clipped paths */
-      filter: drop-shadow(4px 4px 0px #c05c3d); /* Use drop-shadow to perfectly outline the cross */
+      box-shadow: none !important;
+      filter: drop-shadow(4px 4px 0px #c05c3d);
     }
-    
     [data-id="corridor_cross"].dragging {
       filter: drop-shadow(6px 6px 0px #c05c3d);
     }
-    
-    /* Hide the blocky rectangular nameplates so they don't visually overlap the custom shapes */
     [data-id^="corridor_curve"] .room-name, 
     [data-id="corridor_cross"] .room-name {
       display: none;
@@ -313,18 +345,21 @@
     
   /* --- Printer Friendly Override --- */
     body.printer-friendly .target-number { background: #ffffff !important; color: #000000 !important; border-color: #000000 !important; }
-    body.printer-friendly .target-number::before, body.printer-friendly .target-number::after { border-color: #000000 !important; }    body.printer-friendly #workspace { background-color: #ffffff !important; background-image: none !important; box-shadow: none !important; }
+    body.printer-friendly .target-number::before, body.printer-friendly .target-number::after { border-color: #000000 !important; }    
+    body.printer-friendly #workspace, body.printer-friendly #fleet-workspace { background-color: #ffffff !important; background-image: none !important; box-shadow: none !important; }
     body.printer-friendly .room, body.printer-friendly .hull-ui, body.printer-friendly .power-pool-ui, body.printer-friendly .speed-track-ui { border-color: #000000 !important; background-color: #ffffff !important; box-shadow: none !important; filter: none !important; }
     body.printer-friendly [data-id^="corridor_curve"], body.printer-friendly [data-id="corridor_cross"] { background-color: transparent !important; filter: drop-shadow(4px 4px 0px #000000) !important; }
     body.printer-friendly [data-id="corridor_curve_ne"] { background: radial-gradient(circle at bottom left, transparent 17px, #000000 17px, #000000 20px, #ffffff 20px, #ffffff 87px, #000000 87px, #000000 90px, transparent 90px) !important; }
     body.printer-friendly [data-id="corridor_curve_nw"] { background: radial-gradient(circle at bottom right, transparent 17px, #000000 17px, #000000 20px, #ffffff 20px, #ffffff 87px, #000000 87px, #000000 90px, transparent 90px) !important; }
     body.printer-friendly [data-id="corridor_curve_se"] { background: radial-gradient(circle at top left, transparent 17px, #000000 17px, #000000 20px, #ffffff 20px, #ffffff 87px, #000000 87px, #000000 90px, transparent 90px) !important; }
     body.printer-friendly [data-id="corridor_curve_sw"] { background: radial-gradient(circle at top right, transparent 17px, #000000 17px, #000000 20px, #ffffff 20px, #ffffff 87px, #000000 87px, #000000 90px, transparent 90px) !important; }
-    body.printer-friendly .power-pool-ui { background-image: none !important; }    body.printer-friendly .hp-box { background: #000000 !important; color: #000000 !important; border: none !important; z-index: 1; }
+    body.printer-friendly .power-pool-ui { background-image: none !important; }    
+    body.printer-friendly .hp-box { background: #000000 !important; color: #000000 !important; border: none !important; z-index: 1; }
     body.printer-friendly .hp-box::before { content: ''; position: absolute; top: 2px; left: 2px; right: 2px; bottom: 2px; background: #ffffff !important; clip-path: polygon(0 0, 100% 0, 100% 72%, 72% 100%, 0 100%); z-index: -1; }
     
     body.printer-friendly .reactor-hp-box { background: #000000 !important; color: #000000 !important; border: none !important; z-index: 1; }
-    body.printer-friendly .reactor-hp-box::before { content: ''; position: absolute; top: 2px; left: 2px; right: 2px; bottom: 2px; background: #ffffff !important; clip-path: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%); z-index: -1; }    body.printer-friendly .ammo-box { border-bottom: 2px solid #000000 !important; }
+    body.printer-friendly .reactor-hp-box::before { content: ''; position: absolute; top: 2px; left: 2px; right: 2px; bottom: 2px; background: #ffffff !important; clip-path: polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0% 70%, 0% 30%); z-index: -1; }    
+    body.printer-friendly .ammo-box { border-bottom: 2px solid #000000 !important; }
     body.printer-friendly .room-name { background: #ffffff !important; color: #000000 !important; border-top: 2px solid #000000 !important; }
     body.printer-friendly .ship-class-text { color: #000000 !important; }
     body.printer-friendly .door { background: #ffffff !important; border-color: #000000 !important; }
@@ -333,6 +368,7 @@
     body.printer-friendly .portrait-ui:not(.has-image) { display: none !important; }
     body.printer-friendly .crew-manifest-ui { border-color: #000000 !important; box-shadow: none !important; }
     body.printer-friendly .crew-header { background: #ffffff !important; color: #000000 !important; border-bottom: 2px solid #000000 !important; }
+    
     /* --- Modal Styling --- */
     #modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; z-index: 1000; }
     #modal-content { background: #f0ebe1; color: #1a1a1a; width: 500px; max-height: 80vh; border: 3px solid #1a1a1a; display: flex; flex-direction: column; overflow: hidden; box-shadow: 8px 8px 0px #c05c3d;}
@@ -344,7 +380,7 @@
     .btn-load { background: #4a7c82; color: white; border: 2px solid #1a1a1a; }
     .btn-delete { background: #c05c3d; color: white; border: 2px solid #1a1a1a; }
 
-	/* --- Component Print Mode --- */
+    /* --- Component Print Mode --- */
     .cut-wrapper {
       position: relative;
       display: inline-flex;
@@ -364,177 +400,207 @@
       margin: 0 !important;
       transform: none !important;
     }
-    #components-print-container {
-      display: none;
-      width: 100%;
-      background: #ffffff;
+    #components-print-container { display: none; width: 100%; background: #ffffff; }
+    body.print-components-mode { background: #ffffff !important; }
+    body.print-components-mode #components-print-container { display: flex; flex-wrap: wrap; align-content: flex-start; align-items: flex-start; }
+    
+    /* --- Fleet Print Mode --- */
+    #fleet-print-container { display: none; width: 100%; background: #ffffff; flex-direction: column; }
+    body.print-fleet-mode #fleet-print-container { display: flex; }
+    .fleet-page {
+      position: relative;
+      width: 210mm;
+      height: 297mm;
+      page-break-after: always;
+      break-after: page;
+      background-color: #f0ebe1; 
+      background-image: linear-gradient(#dbd6cc 1px, transparent 1px), linear-gradient(90deg, #dbd6cc 1px, transparent 1px);
+      background-size: 10px 10px; 
+      overflow: hidden;
+      isolation: isolate; 
     }
-    body.print-components-mode {
-      background: #ffffff !important;
-    }
-    body.print-components-mode #components-print-container {
-      display: flex;
-      flex-wrap: wrap;
-      align-content: flex-start;
-      align-items: flex-start;
-    }
-    body.print-components-mode #sidebar,
-    body.print-components-mode #right-sidebar,
-    body.print-components-mode #workspace,
-    body.print-components-mode #modal-overlay,
-    body.print-components-mode #room-modal-overlay,
-    body.print-components-mode #about-modal-overlay {
-      display: none !important;
-    }
+    body.printer-friendly .fleet-page { background-color: #ffffff !important; background-image: none !important; }
 
     /* Flatten components for physical printing */
     body.print-components-mode .room,
-    body.print-components-mode .board-ui {
-      box-shadow: none !important;
-    }
+    body.print-components-mode .board-ui { box-shadow: none !important; }
     body.print-components-mode [data-id^="corridor_curve"],
-    body.print-components-mode .shield-svg {
-      filter: none !important;
-    }
-    body.print-components-mode [data-id="corridor_cross"] {
-      filter: drop-shadow(2px 2px 0px #1a1a1a) !important;
-    }
+    body.print-components-mode .shield-svg { filter: none !important; }
+    body.print-components-mode [data-id="corridor_cross"] { filter: drop-shadow(2px 2px 0px #1a1a1a) !important; }
 
     /* Print Output Control */
     @media print {
       @page { size: A4 portrait; margin: 0 !important; }
-      /* Forces the browser to print the background grid and colors globally */
       * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
       html, body { width: 210mm; height: 297mm; margin: 0 !important; padding: 0 !important; display: block; overflow: hidden; }
       
-      /* Release the single-page height lock for the component sheet */
-      html.print-components-mode, body.print-components-mode { width: auto !important; height: auto !important; overflow: visible !important; }
+      /* Release the single-page height lock for multi-page prints */
+      html.print-components-mode, body.print-components-mode, html.print-fleet-mode, body.print-fleet-mode { width: auto !important; height: auto !important; overflow: visible !important; }
       
-      #sidebar, #right-sidebar, #modal-overlay { display: none !important; }      #workspace { margin: 0 !important; padding: 0 !important; width: 210mm; height: 297mm; position: absolute; top: 0; left: 0; border: none; box-shadow: none !important;}
+      /* Hide sidebars and inactive screens for normal printing */
+      #sidebar, #right-sidebar, #fleet-sidebar, #fleet-screen, #modal-overlay, #room-modal-overlay, #about-modal-overlay { display: none !important; }      
+      
+      /* Hide the builder screen entirely ONLY during specialized multi-page prints */
+      body.print-components-mode #builder-screen, body.print-fleet-mode #builder-screen { display: none !important; }
+
+      #workspace { margin: 0 !important; padding: 0 !important; width: 210mm; height: 297mm; position: absolute; top: 0; left: 0; border: none; box-shadow: none !important;}
       .btn-delete-room { display: none !important; } 
       .portrait-ui:not(.has-image) { display: none !important; }
-    }
-  </style>
+    }  </style>
 </head>
 <body>
 
-  <div id="sidebar">
-    <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #4a4742; padding-bottom: 10px;">
-      <h2 style="margin: 0; letter-spacing: -1px; text-transform: uppercase;">CORVET<br>Ship Builder</h2>
-      <button id="btn-about" title="About CORVET" style="background: #2a2826; border: 1px solid #4a4742; color: #e0dcd3; width: 40px; height: 40px; font-size: 24px; display: flex; align-items: center; justify-content: center; padding: 0; border-radius: 50%; font-weight: bold; flex-shrink: 0;">?</button>
-    </div>
-    
-    <div>
-      <label style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Ship Name:</label>
-      <input type="text" id="ship-name-input" value="NEW SHIP" style="width: 100%; margin-top: 5px;">
-    </div>
+  <div id="builder-screen">
+    <div id="sidebar">
+      <div style="border-bottom: 2px solid #4a4742; padding-bottom: 10px; margin-bottom: 5px;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+          <h2 style="margin: 0; letter-spacing: -1px; text-transform: uppercase;">CORVET<br>Ship Builder</h2>
+          <button id="btn-about" title="About CORVET" style="background: #2a2826; border: 1px solid #4a4742; color: #e0dcd3; width: 40px; height: 40px; font-size: 24px; display: flex; align-items: center; justify-content: center; padding: 0; border-radius: 50%; font-weight: bold; flex-shrink: 0;">?</button>
+        </div>
+        <button id="btn-toggle-fleet" style="width: 100%; margin-top: 15px; font-weight: bold; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; padding: 10px;">
+          <span>Fleet Editor</span>
+          <span>&rarr;</span>
+        </button>
+      </div>
+      
+      <div>
+        <label style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Ship Name:</label>        <input type="text" id="ship-name-input" value="NEW SHIP" style="width: 100%; margin-top: 5px;">
+      </div>
 
-    <div>
-      <label style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Ship Class:</label>
-      <input type="text" id="ship-class-input" value="ASSAULT CORVETTE" style="width: 100%; margin-top: 5px;">
-    </div>
+      <div>
+        <label style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Ship Class:</label>
+        <input type="text" id="ship-class-input" value="ASSAULT CORVETTE" style="width: 100%; margin-top: 5px;">
+      </div>
 
-    <div>
-      <label for="room-select" style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Select Room:</label>
-      <div style="display: flex; gap: 5px; margin-top: 5px; max-width: 240px;">
-        <select id="room-select" style="flex-grow: 1; min-width: 0; width: 100%;"></select>
-        <button id="btn-delete-custom-room" class="btn-danger" style="display: none; font-weight: bold; padding: 0 10px; flex-shrink: 0;" title="Delete Custom Room">&times;</button>
+      <div>
+        <label for="room-select" style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Select Room:</label>
+        <div style="display: flex; gap: 5px; margin-top: 5px; max-width: 240px;">
+          <select id="room-select" style="flex-grow: 1; min-width: 0; width: 100%;"></select>
+          <button id="btn-delete-custom-room" class="btn-danger" style="display: none; font-weight: bold; padding: 0 10px; flex-shrink: 0;" title="Delete Custom Room">&times;</button>
+        </div>
+      </div>
+      <button id="btn-add" style="font-weight: bold; text-transform: uppercase; width: 100%; margin-bottom: 8px; margin-top: 5px; background: #4a7c82; color: white; border: 1px solid #1a1a1a; font-size: 16px; padding: 10px;">Add Room</button>
+      <div style="display: flex; gap: 8px;">
+        <button id="btn-custom-room" style="font-weight: bold; text-transform: uppercase; flex-grow: 1;">Custom Room</button>
+        <button id="btn-add-image" style="font-weight: bold; text-transform: uppercase; flex-grow: 1;">Add Image Box</button>
+      </div>
+      
+      <h3 id="points-total" style="display: none;">Total Points: 0</h3>
+      <div id="warnings-container" style="color: #ff4444; font-size: 0.85em; font-weight: bold; line-height: 1.4; max-width: 240px; white-space: normal;"></div>
+      <label style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Library Management:</label>    <div class="tool-grid">
+        <button class="btn-tool" id="btn-new" title="New Ship">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"></path></svg>
+        </button>
+        <button class="btn-tool" id="btn-save-lib" title="Save to Library">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+        </button>
+        <button class="btn-tool" id="btn-open-lib" title="Open Library">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+        </button>
+        <button class="btn-tool" id="btn-export" title="Export Library">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+        </button>
+        <button class="btn-tool" id="btn-merge" title="Merge Library (Add)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"></circle><circle cx="6" cy="6" r="3"></circle><path d="M6 21V9a9 9 0 0 0 9 9"></path></svg>
+        </button>
+        <button class="btn-tool btn-danger" id="btn-wipe" title="Wipe Database">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M3 5v14c0 1.66 4 3 9 3"></path><path d="M21 5v4"></path><line x1="15" y1="15" x2="21" y2="21"></line><line x1="21" y1="15" x2="15" y2="21"></line></svg>
+        </button>
+      </div>
+
+      <!-- Hidden File Inputs -->
+      <input type="file" id="file-merge" accept=".json" style="display: none;">
+      <input type="file" id="file-portrait" accept="image/*" style="display: none;">
+      <div style="display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 10px;">
+        <button id="btn-refresh-numbers" style="display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: bold; text-transform: uppercase;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path></svg>
+          Refresh Numbers
+        </button>
+        <button id="btn-group-move" style="display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: bold; text-transform: uppercase;">        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M19 9l3 3-3 3M9 19l3 3 3 3M2 12h20M12 2v20"/></svg>
+          Group Move: OFF
+        </button>
+    <button id="btn-theme" style="display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: bold; text-transform: uppercase;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path></svg>
+          Printer Friendly: OFF
+        </button>      
+    <button id="btn-print" style="display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: bold; text-transform: uppercase;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+          Print Board
+        </button>
+        <button id="btn-print-components" style="display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: bold; text-transform: uppercase; margin-top: 8px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+          Print Component Sheet
+        </button>
       </div>
     </div>
-    <button id="btn-add" style="font-weight: bold; text-transform: uppercase; width: 100%; margin-bottom: 8px; margin-top: 5px; background: #4a7c82; color: white; border: 1px solid #1a1a1a; font-size: 16px; padding: 10px;">Add Room</button>
-    <div style="display: flex; gap: 8px;">
-      <button id="btn-custom-room" style="font-weight: bold; text-transform: uppercase; flex-grow: 1;">Custom Room</button>
-      <button id="btn-add-image" style="font-weight: bold; text-transform: uppercase; flex-grow: 1;">Add Image Box</button>
-    </div>
-    
-    <h3 id="points-total" style="display: none;">Total Points: 0</h3>
-    <div id="warnings-container" style="color: #ff4444; font-size: 0.85em; font-weight: bold; line-height: 1.4; max-width: 240px; white-space: normal;"></div>
-    <label style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Library Management:</label>    <div class="tool-grid">
-      <button class="btn-tool" id="btn-new" title="New Ship">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"></path></svg>
-      </button>
-      <button class="btn-tool" id="btn-save-lib" title="Save to Library">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
-      </button>
-      <button class="btn-tool" id="btn-open-lib" title="Open Library">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
-      </button>
-      <button class="btn-tool" id="btn-export" title="Export Library">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-      </button>
-      <button class="btn-tool" id="btn-import" title="Import Library (Overwrite)">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-      </button>
-      <button class="btn-tool" id="btn-merge" title="Merge Library (Add)">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"></circle><circle cx="6" cy="6" r="3"></circle><path d="M6 21V9a9 9 0 0 0 9 9"></path></svg>
-      </button>
-      <button class="btn-tool btn-danger" id="btn-wipe" title="Wipe Database">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M3 5v14c0 1.66 4 3 9 3"></path><path d="M21 5v4"></path><line x1="15" y1="15" x2="21" y2="21"></line><line x1="21" y1="15" x2="15" y2="21"></line></svg>
-      </button>
-    </div>
 
-    <!-- Hidden File Inputs -->
-    <input type="file" id="file-import" accept=".json" style="display: none;">
-    <input type="file" id="file-merge" accept=".json" style="display: none;">
-    <input type="file" id="file-portrait" accept="image/*" style="display: none;">
+    <div id="workspace"></div>
 
-    <div style="display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 10px;">
-      <button id="btn-refresh-numbers" style="display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: bold; text-transform: uppercase;">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path></svg>
-        Refresh Numbers
-      </button>
-      <button id="btn-group-move" style="display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: bold; text-transform: uppercase;">        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M19 9l3 3-3 3M9 19l3 3 3 3M2 12h20M12 2v20"/></svg>
-        Group Move: OFF
-      </button>
-	<button id="btn-theme" style="display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: bold; text-transform: uppercase;">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path></svg>
-        Printer Friendly: OFF
-      </button>      
-	<button id="btn-print" style="display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: bold; text-transform: uppercase;">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
-        Print
-      </button>
-      <button id="btn-print-components" style="display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: bold; text-transform: uppercase; margin-top: 8px;">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-        Print Component Sheet
-      </button>
+    <div id="right-sidebar">
+      <h2 style="margin-top: 0; letter-spacing: -1px; text-transform: uppercase; border-bottom: 2px solid #4a4742; padding-bottom: 10px;">Loadout<br>Options</h2>
+      
+      <div>
+        <label style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Hull:</label>        <select id="hull-select" style="width: 100%; margin-top: 5px;"></select>
+      </div>
+      
+      <div>
+        <label style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Shield Bank:</label>
+        <select id="shield-select" style="width: 100%; margin-top: 5px;"></select>
+      </div>
+
+      <div>
+        <label style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Reactor:</label>
+        <select id="reactor-select" style="width: 100%; margin-top: 5px;"></select>
+      </div>
+      
+      <div>
+        <label style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Engine:</label>
+        <select id="engine-select" style="width: 100%; margin-top: 5px;"></select>
+      </div>
+      
+      <div>
+        <label style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Helm:</label>
+        <select id="helm-select" style="width: 100%; margin-top: 5px;"></select>
+      </div>
+
+      <hr style="border-color: #3a3835; margin: 5px 0;">
+      <h3 style="margin: 0; font-size: 14px; letter-spacing: -1px; text-transform: uppercase; color: #a19d94;">Crew Roster</h3>
+      <div id="crew-sidebar-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
+      <button id="btn-add-crew" style="font-weight: bold; text-transform: uppercase; margin-top: 5px; background: #4a7c82; color: white; border: 1px solid #1a1a1a;">+ Add Crew</button>
     </div>
   </div>
 
-  <div id="workspace"></div>
-
-   <div id="right-sidebar">
-    <h2 style="margin-top: 0; letter-spacing: -1px; text-transform: uppercase; border-bottom: 2px solid #4a4742; padding-bottom: 10px;">Loadout<br>Options</h2>
-    
-    <div>
-      <label style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Hull:</label>
-      <select id="hull-select" style="width: 100%; margin-top: 5px;"></select>
+  <div id="fleet-screen">
+    <div id="fleet-sidebar">
+      <div style="border-bottom: 2px solid #4a4742; padding-bottom: 10px; margin-bottom: 5px;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+          <h2 style="margin: 0; letter-spacing: -1px; text-transform: uppercase; color: #4a7c82;">CORVET<br>Fleet Editor</h2>
+          <button id="btn-about-fleet" title="About CORVET" style="background: #2a2826; border: 1px solid #4a4742; color: #e0dcd3; width: 40px; height: 40px; font-size: 24px; display: flex; align-items: center; justify-content: center; padding: 0; border-radius: 50%; font-weight: bold; flex-shrink: 0; cursor: pointer;">?</button>
+        </div>
+        <button id="btn-back-builder" style="width: 100%; margin-top: 15px; font-weight: bold; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; padding: 10px;">          <span>&larr;</span>
+          <span>Ship Builder</span>
+        </button>
+      </div>
+      
+      <div>
+        <label style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Add Ship to Fleet:</label>        <select id="fleet-ship-select" style="width: 100%; margin-top: 5px;"></select>
+        <button id="btn-add-to-fleet" style="font-weight: bold; text-transform: uppercase; width: 100%; margin-top: 8px; background: #4a7c82; color: white; border: 1px solid #1a1a1a; padding: 8px;">+ Add Ship</button>
+      </div>
+      
+      <h3 id="fleet-points-total" style="margin: 5px 0; color: #c05c3d;">Fleet Total: 0 pts</h3>
+      <hr style="width: 100%; border-color: #3a3835; margin: 0;">
+      
+      <div id="fleet-list" style="display: flex; flex-direction: column; gap: 8px; overflow-y: auto; flex-grow: 1;"></div>
+      
+      <button id="btn-print-fleet" style="display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: bold; text-transform: uppercase; margin-top: auto; padding: 10px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+        Print Fleet Boards
+      </button>
     </div>
     
-    <div>
-      <label style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Shield Bank:</label>
-      <select id="shield-select" style="width: 100%; margin-top: 5px;"></select>
+    <div id="fleet-workspace">
+       <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 24px; color: #a19d94; opacity: 0.5;">Select a ship from the fleet to preview</div>
     </div>
-
-    <div>
-      <label style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Reactor:</label>
-      <select id="reactor-select" style="width: 100%; margin-top: 5px;"></select>
-    </div>
-    
-    <div>
-      <label style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Engine:</label>
-      <select id="engine-select" style="width: 100%; margin-top: 5px;"></select>
-    </div>
-    
-    <div>
-      <label style="font-size: 0.8em; color: #a19d94; text-transform: uppercase; font-weight: bold;">Helm:</label>
-      <select id="helm-select" style="width: 100%; margin-top: 5px;"></select>
-    </div>
-
-    <hr style="border-color: #3a3835; margin: 5px 0;">
-    <h3 style="margin: 0; font-size: 14px; letter-spacing: -1px; text-transform: uppercase; color: #a19d94;">Crew Roster</h3>
-    <div id="crew-sidebar-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
-    <button id="btn-add-crew" style="font-weight: bold; text-transform: uppercase; margin-top: 5px; background: #4a7c82; color: white; border: 1px solid #1a1a1a;">+ Add Crew</button>
   </div>
 
   <!-- About Modal Overlay -->
@@ -603,7 +669,7 @@
       <div class="modal-body" id="library-list">
       </div>
       <div class="modal-footer">
-        <button id="btn-close-modal" style="color:white; background: #1a1a1a; font-family: inherit; padding: 8px 16px; border: 2px solid transparent; font-weight: bold; cursor: pointer;">Close</button>
+        <button id="btn-close-modal" style="color:white; background: #1a1a1a; font-family: inherit; padding: 8px 16px; border: 2px transparent; font-weight: bold; cursor: pointer;">Close</button>
       </div>
     </div>
   </div>

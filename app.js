@@ -3,6 +3,57 @@ const workspace = document.getElementById('workspace');
 let shipLibrary = [];
 let shipCrew = [{ name: 'Crewman 1', perk: 'none' }];
 let customRoomsDatabase = [];
+let currentFleet = [];
+let activeFleetShipId = null;
+
+// --- SORTING HELPERS ---
+function getShipClass(layout) {
+  if (!layout) return "PLEASE RESAVE SHIP";
+  const header = layout.find(item => item.id === 'header');
+  return (header && header.customClassText && header.customClassText.trim() !== '') 
+    ? header.customClassText.toUpperCase() 
+    : "PLEASE RESAVE SHIP";
+}
+
+function getSortedLibrary() {
+  return [...shipLibrary].sort((a, b) => {
+    const classA = getShipClass(a.layout);
+    const classB = getShipClass(b.layout);
+    if (classA < classB) return -1;
+    if (classA > classB) return 1;
+    return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+  });
+}
+
+function getShipPoints(ship) {
+  if (ship.points !== undefined) return ship.points;
+  
+  let shipPoints = 0;
+  ship.layout.forEach(item => {
+    if (!item.isUI) {
+      const roomData = roomDatabase.find(db => db.id === item.id);
+      if (roomData && roomData.cost) shipPoints += roomData.cost;
+    } else if (item.id === 'hull' && item.customText) {
+      const hullData = hullDatabase.find(h => h.id === item.customText);
+      if (hullData && hullData.cost) shipPoints += hullData.cost;
+    } else if (item.id === 'shields' && item.customText) {
+      const shieldData = shieldDatabase.find(s => s.id === item.customText);
+      if (shieldData && shieldData.cost) shipPoints += shieldData.cost;
+    } else if (item.id === 'crew-manifest' && item.customText) {
+       try {
+         const parsedCrew = JSON.parse(item.customText);
+         shipPoints += (Math.max(0, parsedCrew.length - 1) * crewConfig.cost);
+         parsedCrew.forEach(c => {
+           if (c.perk && c.perk !== 'none') {
+             const pData = crewPerks.find(p => p.id === c.perk);
+             if (pData) shipPoints += pData.cost;
+           }
+         });
+       } catch(e) {}
+    }
+  });
+  return shipPoints;
+}
 
 function loadCustomRoomsFromLocal() {
   const savedRooms = localStorage.getItem('corvet_custom_rooms');
@@ -24,6 +75,9 @@ function init() {
   loadCustomRoomsFromLocal();
   populateDropdown();
   loadLibraryFromLocal();
+  loadFleetFromLocal();
+  updateFleetDropdown();
+  renderFleetSidebar();
   loadThemePreference();
   
   const autosave = localStorage.getItem('corvet_autosave');
@@ -406,7 +460,7 @@ function makeDraggable(element, shouldSnap = true) {
     const isGroupMove = groupBtn && groupBtn.classList.contains('active-mode');
     
     if (isGroupMove && element.classList.contains('room')) {
-      groupData = Array.from(document.querySelectorAll('.room')).map(r => ({
+      groupData = Array.from(workspace.querySelectorAll('.room')).map(r => ({
         el: r,
         initialLeft: r.offsetLeft,
         initialTop: r.offsetTop
@@ -439,9 +493,9 @@ function snapToGrid(element) {
 }
 
 function updateDoors() {
-  document.querySelectorAll('.door').forEach(d => d.remove());
+  workspace.querySelectorAll('.door').forEach(d => d.remove());
   
-  const rooms = Array.from(document.querySelectorAll('.room'));
+  const rooms = Array.from(workspace.querySelectorAll('.room'));
   const connections = new Array(rooms.length).fill(0);
   const overlaps = new Array(rooms.length).fill(false);
   
@@ -450,17 +504,21 @@ function updateDoors() {
       const r1 = rooms[i];
       const r2 = rooms[j];
       
-      const l1 = r1.offsetLeft;
-      const right1 = l1 + r1.offsetWidth;
-      const t1 = r1.offsetTop;
-      const b1 = t1 + r1.offsetHeight;
+      const l1 = parseInt(r1.style.left) || 0;
+      const w1 = parseInt(r1.style.width) || 130;
+      const right1 = l1 + w1;
+      const t1 = parseInt(r1.style.top) || 0;
+      const h1 = parseInt(r1.style.height) || 180;
+      const b1 = t1 + h1;
       
-      const l2 = r2.offsetLeft;
-      const right2 = l2 + r2.offsetWidth;
-      const t2 = r2.offsetTop;
-      const b2 = t2 + r2.offsetHeight;
+      const l2 = parseInt(r2.style.left) || 0;
+      const w2 = parseInt(r2.style.width) || 130;
+      const right2 = l2 + w2;
+      const t2 = parseInt(r2.style.top) || 0;
+      const h2 = parseInt(r2.style.height) || 180;
+      const b2 = t2 + h2;
       
-      // Strict overlap check (excludes perfectly adjacent edges)
+      // Strict overlap check
       if (l1 < right2 && right1 > l2 && t1 < b2 && b1 > t2) {
         overlaps[i] = true;
         overlaps[j] = true;
@@ -469,18 +527,14 @@ function updateDoors() {
       if (right1 === l2 || right2 === l1) {
         const overlapTop = Math.max(t1, t2);
         const overlapBottom = Math.min(b1, b2);
-        
-        // Door is 48px tall. Minimum 54px overlap guarantees 3px margin on each side.
         if (overlapBottom - overlapTop >= 54) {
           const y = (overlapTop + overlapBottom) / 2;
           const x = (right1 === l2) ? right1 : right2;
-          
           const door = document.createElement('div');
           door.className = 'door door-v';
           door.style.left = x + 'px';
           door.style.top = y + 'px';
           workspace.appendChild(door);
-          
           connections[i]++;
           connections[j]++;
         }
@@ -489,18 +543,14 @@ function updateDoors() {
       if (b1 === t2 || b2 === t1) {
         const overlapLeft = Math.max(l1, l2);
         const overlapRight = Math.min(right1, right2);
-        
-        // Door is 48px wide. Minimum 54px overlap guarantees 3px margin on each side.
         if (overlapRight - overlapLeft >= 54) {
           const x = (overlapLeft + overlapRight) / 2;
           const y = (b1 === t2) ? b1 : b2;
-          
           const door = document.createElement('div');
           door.className = 'door door-h';
           door.style.left = x + 'px';
           door.style.top = y + 'px';
           workspace.appendChild(door);
-          
           connections[i]++;
           connections[j]++;
         }
@@ -512,7 +562,7 @@ function updateDoors() {
 }
 
 function updateZIndices() {
-  document.querySelectorAll('.room, .board-ui').forEach(el => {
+  workspace.querySelectorAll('.room, .board-ui').forEach(el => {
     if (!el.classList.contains('dragging')) {
       const x = parseInt(el.style.left) || 0;
       const y = parseInt(el.style.top) || 0;
@@ -522,7 +572,7 @@ function updateZIndices() {
 }
 
 function updateTargetNumbers() {
-  const rooms = Array.from(document.querySelectorAll('.room')).filter(r => {
+  const rooms = Array.from(workspace.querySelectorAll('.room')).filter(r => {
     const data = roomDatabase.find(db => db.id === r.dataset.id);
     return data && data.type !== 'corridor';
   });
@@ -580,13 +630,11 @@ function updateWarnings(rooms, connections, overlaps) {
     
     let hasError = false;
 
-    // Trigger error if overlapping
     if (overlaps && overlaps[idx]) {
       hasError = true;
       hasOverlaps = true;
     }
 
-    // Trigger error if completely isolated (ignored if it's the only room)
     if (connections[idx] === 0 && rooms.length > 1) {
       hasError = true;
       hasDisconnected = true;
@@ -598,8 +646,6 @@ function updateWarnings(rooms, connections, overlaps) {
         overConnectedCorridors = true;
         hasError = true;
       }
-      // Only complain about under-connection if it's currently attached to at least 1 thing
-      // (This prevents it throwing both "disconnected" and "under-connected" simultaneously)
       if (connections[idx] > 0 && connections[idx] < 2) {
         underConnectedCorridors = true;
         hasError = true;
@@ -612,7 +658,6 @@ function updateWarnings(rooms, connections, overlaps) {
       }
     }
     
-    // Toggle the visual warning indicator
     if (hasError) {
       r.classList.add('error-highlight');
     } else {
@@ -651,7 +696,7 @@ function updateWarnings(rooms, connections, overlaps) {
 }
 
 function updatePoints() {
-  const rooms = document.querySelectorAll('.room');
+  const rooms = workspace.querySelectorAll('.room');
   let total = 0;
   rooms.forEach(r => {
     const data = roomDatabase.find(db => db.id === r.dataset.id);
@@ -684,7 +729,9 @@ function updatePoints() {
     }
   }
 
-  document.getElementById('points-total').textContent = 'Total Points: ' + total;
+  const pointsDisplay = document.getElementById('points-total');
+  if(pointsDisplay) pointsDisplay.textContent = 'Total Points: ' + total;
+  
   const boardPoints = document.getElementById('board-points-display');
   if (boardPoints) boardPoints.textContent = total + " Points";
 }
@@ -706,7 +753,7 @@ document.getElementById('ship-class-input').addEventListener('input', (e) => {
 });
 
 function getEmptySpace(width, height) {
-  const els = document.querySelectorAll('.room, .board-ui');
+  const els = workspace.querySelectorAll('.room, .board-ui');
   let startX = 50, startY = 50;
   let safe = false;
   
@@ -825,7 +872,7 @@ document.getElementById('file-portrait').addEventListener('change', (e) => {
 });
 
 function getCurrentLayoutData() {
-  const elements = document.querySelectorAll('.room, .board-ui');
+  const elements = workspace.querySelectorAll('.room, .board-ui');
   const layoutData = [];
   elements.forEach(el => {
     let arcState = null;
@@ -879,10 +926,7 @@ function loadShipToWorkspace(layoutData) {
     }
   });
   
-  // Sync the sidebar dropdowns to the loaded board elements FIRST
   syncDropdownsToBoard();
-  
-  // Now calculate the points with the correct values
   updatePoints();
   updateDoors();
   updateTargetNumbers();
@@ -913,6 +957,8 @@ document.getElementById('btn-save-lib').addEventListener('click', () => {
     alert(`Ship "${shipName}" saved to library.`);
   }
   saveLibraryToLocal();
+  updateFleetDropdown();
+  renderFleetSidebar();
 });
 
 document.getElementById('btn-export').addEventListener('click', () => {
@@ -929,35 +975,7 @@ document.getElementById('btn-export').addEventListener('click', () => {
   URL.revokeObjectURL(url);
 });
 
-document.getElementById('btn-import').addEventListener('click', () => document.getElementById('file-import').click());
-document.getElementById('file-import').addEventListener('change', (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (event) => {
-    try {
-      const data = JSON.parse(event.target.result);
-      if (data.corvetLibrary) {
-        shipLibrary = data.corvetLibrary;
-        saveLibraryToLocal();
-        if (data.customRooms) {
-          customRoomsDatabase = data.customRooms;
-          localStorage.setItem('corvet_custom_rooms', JSON.stringify(customRoomsDatabase));
-        }
-        autoSaveWorkspace();
-        alert("Library imported successfully. Previous library was overwritten. Refreshing to apply custom rooms...");
-        location.reload();
-      } else {
-        alert("Invalid file format.");
-      }
-    } catch (err) { alert("Error reading file."); }
-  };
-  reader.readAsText(file);
-  e.target.value = ''; 
-});
-
-document.getElementById('btn-merge').addEventListener('click', () => document.getElementById('file-merge').click());
-document.getElementById('file-merge').addEventListener('change', (e) => {
+document.getElementById('btn-merge').addEventListener('click', () => document.getElementById('file-merge').click());document.getElementById('file-merge').addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (!file) return;
   const reader = new FileReader();
@@ -989,6 +1007,8 @@ document.getElementById('btn-wipe').addEventListener('click', () => {
   if (confirm("Are you sure you want to permanently delete all ships in your library? Make sure you have exported a backup first.")) {
     shipLibrary = [];
     saveLibraryToLocal();
+    updateFleetDropdown();
+    renderFleetSidebar();
     alert("Library wiped.");
   }
 });
@@ -1003,41 +1023,17 @@ document.getElementById('btn-open-lib').addEventListener('click', () => {
   if (shipLibrary.length === 0) {
     listContainer.innerHTML = '<div style="color:#888; text-align:center; padding: 20px;">Library is empty.</div>';
   } else {
-    shipLibrary.forEach((ship, index) => {
-      let shipPoints = ship.points;
-      
-      if (shipPoints === undefined) {
-        shipPoints = 0;
-        ship.layout.forEach(item => {
-          if (!item.isUI) {
-            const roomData = roomDatabase.find(db => db.id === item.id);
-            if (roomData && roomData.cost) shipPoints += roomData.cost;
-          } else if (item.id === 'hull' && item.customText) {
-            const hullData = hullDatabase.find(h => h.id === item.customText);
-            if (hullData && hullData.cost) shipPoints += hullData.cost;
-          } else if (item.id === 'shields' && item.customText) {
-            const shieldData = shieldDatabase.find(s => s.id === item.customText);
-            if (shieldData && shieldData.cost) shipPoints += shieldData.cost;
-          } else if (item.id === 'crew-manifest' && item.customText) {
-             try {
-               const parsedCrew = JSON.parse(item.customText);
-               shipPoints += (Math.max(0, parsedCrew.length - 1) * crewConfig.cost);
-               parsedCrew.forEach(c => {
-                 if (c.perk && c.perk !== 'none') {
-                   const pData = crewPerks.find(p => p.id === c.perk);
-                   if (pData) shipPoints += pData.cost;
-                 }
-               });
-             } catch(e) {}
-          }
-        });
-      }
+    const sortedLib = getSortedLibrary();
+
+    sortedLib.forEach((ship) => {
+      let shipPoints = getShipPoints(ship);
+      const shipClass = getShipClass(ship.layout);
 
       const item = document.createElement('div');
       item.className = 'library-item';
       
       const title = document.createElement('div');
-      title.innerHTML = `<strong>${ship.name}</strong><br><span style="font-size:12px; color:#888;">${shipPoints} Points</span>`;
+      title.innerHTML = `<strong style="font-size: 16px; color: #1a1a1a;">${ship.name}</strong><br><span style="font-size:12px; color:#4a7c82; font-weight:bold; text-transform:uppercase;">${shipClass}</span><br><span style="font-size:12px; color:#888;">${shipPoints} Points</span>`;
       
       const actions = document.createElement('div');
       actions.className = 'library-item-actions';
@@ -1058,8 +1054,11 @@ document.getElementById('btn-open-lib').addEventListener('click', () => {
       btnDelete.textContent = 'Delete';
       btnDelete.onclick = () => {
         if(confirm(`Delete "${ship.name}" from library?`)) {
-          shipLibrary.splice(index, 1);
+          const realIndex = shipLibrary.findIndex(s => s.name === ship.name);
+          shipLibrary.splice(realIndex, 1);
           saveLibraryToLocal();
+          updateFleetDropdown();
+          renderFleetSidebar();
           document.getElementById('btn-open-lib').click(); 
         }
       };
@@ -1081,18 +1080,18 @@ window.addEventListener('click', (e) => { if (e.target === modal) modal.style.di
 init();
 
 function syncDropdownsToBoard() {
-  document.querySelectorAll('.room').forEach(el => {
+  workspace.querySelectorAll('.room').forEach(el => {
     const dbRoom = roomDatabase.find(r => r.id === el.dataset.id);
     if (dbRoom && dbRoom.core_category) {
        const sel = document.getElementById(`${dbRoom.core_category}-select`);
        if (sel) sel.value = dbRoom.id;
     }
   });
-  const hullUi = document.querySelector('.hull-ui');
+  const hullUi = workspace.querySelector('.hull-ui');
   if (hullUi && hullUi.dataset.hullId) {
     document.getElementById('hull-select').value = hullUi.dataset.hullId;
   }
-  const shieldUi = document.querySelector('.shield-ui');
+  const shieldUi = workspace.querySelector('.shield-ui');
   if (shieldUi && shieldUi.dataset.shieldId) {
     document.getElementById('shield-select').value = shieldUi.dataset.shieldId;
   }
@@ -1100,7 +1099,7 @@ function syncDropdownsToBoard() {
 
 function swapCoreRoom(category, selectElementId) {
   const newRoomId = document.getElementById(selectElementId).value;
-  const currentRoomEl = Array.from(document.querySelectorAll('.room')).find(el => {
+  const currentRoomEl = Array.from(workspace.querySelectorAll('.room')).find(el => {
     const dbRoom = roomDatabase.find(r => r.id === el.dataset.id);
     return dbRoom && dbRoom.core_category === category;
   });
@@ -1128,7 +1127,7 @@ document.getElementById('helm-select').addEventListener('change', () => swapCore
 
 document.getElementById('hull-select').addEventListener('change', (e) => {
   const hullData = hullDatabase.find(h => h.id === e.target.value);
-  const hullUi = document.querySelector('.hull-ui');
+  const hullUi = workspace.querySelector('.hull-ui');
   if (hullUi && hullData) {
     hullUi.dataset.hullId = hullData.id;
     const hpBox = hullUi.querySelector('div:first-child');
@@ -1140,7 +1139,7 @@ document.getElementById('hull-select').addEventListener('change', (e) => {
 
 document.getElementById('shield-select').addEventListener('change', (e) => {
   const shieldData = shieldDatabase.find(s => s.id === e.target.value);
-  const shieldUi = document.querySelector('.shield-ui');
+  const shieldUi = workspace.querySelector('.shield-ui');
   if (shieldUi && shieldData) {
     shieldUi.dataset.shieldId = shieldData.id;
     const hpSpan = shieldUi.querySelector('span');
@@ -1288,7 +1287,6 @@ document.getElementById('btn-save-custom-room').addEventListener('click', () => 
   roomDatabase.push(newRoom);
   localStorage.setItem('corvet_custom_rooms', JSON.stringify(customRoomsDatabase));
   
-  // Rebuild the dropdown to maintain alphabetical sorting
   const select = document.getElementById('room-select');
   select.innerHTML = '';
   roomDatabase.filter(r => r.type !== 'core')
@@ -1315,7 +1313,6 @@ function updateCustomRoomDeleteButton() {
 
 document.getElementById('room-select').addEventListener('change', updateCustomRoomDeleteButton);
 
-// Call shortly after init to catch initial state
 setTimeout(updateCustomRoomDeleteButton, 100);
 
 document.getElementById('btn-delete-custom-room').addEventListener('click', () => {
@@ -1352,8 +1349,11 @@ document.getElementById('btn-about').addEventListener('click', () => {
   aboutModalOverlay.style.display = 'flex';
 });
 
-document.getElementById('close-about-modal').addEventListener('click', () => {
-  aboutModalOverlay.style.display = 'none';
+document.getElementById('btn-about-fleet').addEventListener('click', () => {
+  aboutModalOverlay.style.display = 'flex';
+});
+
+document.getElementById('close-about-modal').addEventListener('click', () => {  aboutModalOverlay.style.display = 'none';
 });
 
 document.getElementById('btn-close-about').addEventListener('click', () => {
@@ -1372,7 +1372,6 @@ document.getElementById('btn-print-components').addEventListener('click', () => 
   const wrap = (content) => `<div class="cut-wrapper">${content}</div>`;
   let html = '';
   
-  // 1x Combined Status Card (Blank Hull, Shields, Crew)
   const combinedCardHTML = `
     <div class="board-ui" style="width: 190px; border: 3px solid #1a1a1a; display: flex; flex-direction: column; background: #ffffff;">
       <div style="display: flex; justify-content: space-around; align-items: flex-start; padding: 15px 5px 35px 5px; border-bottom: 3px solid #1a1a1a;">
@@ -1392,11 +1391,9 @@ document.getElementById('btn-print-components').addEventListener('click', () => 
   `;
   html += wrap(combinedCardHTML);
 
-  // 3x Power Pool
   const powerPoolHTML = `<div class="board-ui power-pool-ui" style="width: 250px; height: 120px; box-shadow: none; border-color: #1a1a1a;">Power Pool</div>`;
   for(let i=0; i<3; i++) html += wrap(powerPoolHTML);
 
-  // 3x Speed Track
   const speedTrackHTML = `
     <div class="board-ui speed-track-ui" style="width: 50px; box-shadow: none; border-color: #1a1a1a;">
       <div class="speed-box">SP</div>
@@ -1411,48 +1408,200 @@ document.getElementById('btn-print-components').addEventListener('click', () => 
   `;
   for(let i=0; i<3; i++) html += wrap(speedTrackHTML);
 
-  // All Rooms and Corridors
   function generateRoomHTML(roomData) {
     if (roomData.type === 'corridor') {
       return `<div class="room" data-id="${roomData.id}" style="width: ${roomData.width}px; height: ${roomData.height}px; box-shadow: none; border-color: #1a1a1a;"></div>`;
     }
     
     let rHtml = `<div class="room" data-id="${roomData.id}" style="width: ${roomData.width}px; height: ${roomData.height}px; box-shadow: none; border-color: #1a1a1a;"><div class="room-inner">`;
+    if (roomData.max_hp !== undefined) rHtml += `<div class="${roomData.core_category === 'reactor' ? 'reactor-hp-box' : 'hp-box'}">${roomData.max_hp}</div>`;
+    if (roomData.ammo && roomData.ammo > 0) rHtml += `<div class="ammo-box">A${roomData.ammo}</div>`;
+    if (roomData.is_mannable) rHtml += `<div class="manned-circle"></div>`;
+    if (roomData.has_arc) rHtml += `<div class="arc-circle" style="transform: rotate(0deg);"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="48" fill="none" stroke="currentColor" stroke-width="4"/><line x1="16.06" y1="16.06" x2="83.94" y2="83.94" stroke="currentColor" stroke-width="4"/><line x1="16.06" y1="83.94" x2="83.94" y2="16.06" stroke="currentColor" stroke-width="4"/><path d="M50,50 L16.06,16.06 A48,48 0 0,1 83.94,16.06 Z" fill="currentColor" /></svg></div>`;
     
-    if (roomData.max_hp !== undefined) {
-      rHtml += `<div class="${roomData.core_category === 'reactor' ? 'reactor-hp-box' : 'hp-box'}">${roomData.max_hp}</div>`;
-    }
-    if (roomData.ammo && roomData.ammo > 0) {
-      rHtml += `<div class="ammo-box">A${roomData.ammo}</div>`;
-    }
-    if (roomData.is_mannable) {
-      rHtml += `<div class="manned-circle"></div>`;
-    }
-    if (roomData.has_arc) {
-      rHtml += `<div class="arc-circle" style="transform: rotate(0deg);"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="48" fill="none" stroke="currentColor" stroke-width="4"/><line x1="16.06" y1="16.06" x2="83.94" y2="83.94" stroke="currentColor" stroke-width="4"/><line x1="16.06" y1="83.94" x2="83.94" y2="16.06" stroke="currentColor" stroke-width="4"/><path d="M50,50 L16.06,16.06 A48,48 0 0,1 83.94,16.06 Z" fill="currentColor" /></svg></div>`;
-    }
-    rHtml += `<div class="room-name">${roomData.name}</div>`;
-    rHtml += `<div class="target-number"></div>`;
-    rHtml += `</div></div>`;
+    rHtml += `<div class="room-name">${roomData.name}</div><div class="target-number"></div></div></div>`;
     return rHtml;
   }
   
-  roomDatabase.forEach(room => {
-    html += wrap(generateRoomHTML(room));
-  });
+  roomDatabase.forEach(room => html += wrap(generateRoomHTML(room)));
   
   container.innerHTML = html;
   document.body.appendChild(container);
   
-  // Transition safely to print layout
   document.documentElement.classList.add('print-components-mode');
   document.body.classList.add('print-components-mode');
   
-  // Allow DOM to apply styles, then trigger print, then cleanup
   setTimeout(() => {
     window.print();
     document.body.removeChild(container);
     document.documentElement.classList.remove('print-components-mode');
     document.body.classList.remove('print-components-mode');
   }, 250);
+});
+
+// --- FLEET BUILDER LOGIC ---
+
+function loadFleetFromLocal() {
+  const savedFleet = localStorage.getItem('corvet_fleet');
+  if (savedFleet) {
+    try { currentFleet = JSON.parse(savedFleet); } 
+    catch (e) { currentFleet = []; }
+  }
+}
+
+function saveFleetToLocal() {
+  localStorage.setItem('corvet_fleet', JSON.stringify(currentFleet));
+}
+
+function updateFleetDropdown() {
+  const sel = document.getElementById('fleet-ship-select');
+  if (!sel) return;
+  sel.innerHTML = '';
+  if (shipLibrary.length === 0) {
+    sel.innerHTML = '<option disabled>Library is empty</option>';
+    return;
+  }
+  
+  const sortedLib = getSortedLibrary();
+  
+  sortedLib.forEach(ship => {
+    const shipClass = getShipClass(ship.layout);
+    const pts = getShipPoints(ship);
+    
+    const opt = document.createElement('option');
+    opt.value = ship.name;
+    opt.textContent = `${ship.name} - ${shipClass} (${pts} pts)`;
+    sel.appendChild(opt);
+  });
+}
+
+function renderFleetSidebar() {
+  const container = document.getElementById('fleet-list');
+  const totalDisplay = document.getElementById('fleet-points-total');
+  const previewArea = document.getElementById('fleet-workspace');
+  if (!container || !totalDisplay) return;
+  
+  container.innerHTML = '';
+  let totalPts = 0;
+  
+  if (currentFleet.length === 0) {
+    container.innerHTML = '<div style="color:#888; text-align:center; padding: 20px;">Fleet is empty.</div>';
+    if(previewArea) previewArea.innerHTML = '<div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 24px; color: #a19d94; opacity: 0.5;">Select a ship from the fleet to preview</div>';
+  } else {
+    currentFleet.forEach(fItem => {
+      const ship = shipLibrary.find(s => s.name === fItem.shipName);
+      const pts = ship ? getShipPoints(ship) : 0;
+      const shipClass = ship ? getShipClass(ship.layout) : 'Unknown';
+      totalPts += pts;
+      
+      const wrapper = document.createElement('div');
+      wrapper.className = 'fleet-item' + (activeFleetShipId === fItem.id ? ' active' : '');
+      wrapper.style.display = 'flex';
+      wrapper.style.justifyContent = 'space-between';
+      wrapper.style.alignItems = 'center';
+      wrapper.style.background = '#2a2826';
+      wrapper.style.border = '1px solid #4a4742';
+      wrapper.style.padding = '8px';
+      
+      wrapper.onclick = () => {
+         activeFleetShipId = fItem.id;
+         renderFleetSidebar(); 
+         if (ship) renderFleetPreview(ship);
+      };
+      
+      let nameHtml = ship ? `<strong>${ship.name}</strong><br><span class="fleet-item-meta" style="font-size:12px; color:#a19d94;">${shipClass} | ${pts} pts</span>` : `<strong style="color:#ff4444;">Missing: ${fItem.shipName}</strong>`;
+      
+      const nameDiv = document.createElement('div');
+      nameDiv.innerHTML = nameHtml;
+      nameDiv.style.pointerEvents = 'none'; 
+      
+      const delBtn = document.createElement('button');
+      delBtn.innerHTML = '&times;';
+      delBtn.className = 'btn-danger';
+      delBtn.style.padding = '4px 8px';
+      delBtn.title = 'Remove from Fleet';
+      delBtn.onclick = (e) => {
+        e.stopPropagation(); 
+        currentFleet = currentFleet.filter(f => f.id !== fItem.id);
+        if (activeFleetShipId === fItem.id) {
+           activeFleetShipId = null;
+           if(previewArea) previewArea.innerHTML = '<div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 24px; color: #a19d94; opacity: 0.5;">Select a ship from the fleet to preview</div>';
+        }
+        saveFleetToLocal();
+        renderFleetSidebar();
+      };
+      
+      wrapper.appendChild(nameDiv);
+      wrapper.appendChild(delBtn);
+      container.appendChild(wrapper);
+    });
+  }
+  totalDisplay.textContent = `Fleet Total: ${totalPts} pts`;
+}
+
+function renderFleetPreview(ship) {
+   const previewArea = document.getElementById('fleet-workspace');
+   if (!previewArea) return;
+   
+   const activeLayout = getCurrentLayoutData(); 
+   loadShipToWorkspace(ship.layout); 
+   previewArea.innerHTML = workspace.innerHTML.replace(/id="[^"]+"/g, ''); 
+   loadShipToWorkspace(activeLayout); 
+}
+
+document.getElementById('btn-add-to-fleet').addEventListener('click', () => {
+  const sel = document.getElementById('fleet-ship-select');
+  if (sel.value && sel.value !== 'Library is empty') {
+    currentFleet.push({ id: Date.now() + Math.random(), shipName: sel.value });
+    saveFleetToLocal();
+    renderFleetSidebar();
+  }
+});
+
+document.getElementById('btn-toggle-fleet').addEventListener('click', () => {
+  document.getElementById('builder-screen').style.display = 'none';
+  document.getElementById('fleet-screen').style.display = 'flex';
+  renderFleetSidebar();
+});
+
+document.getElementById('btn-back-builder').addEventListener('click', () => {
+  document.getElementById('fleet-screen').style.display = 'none';
+  document.getElementById('builder-screen').style.display = 'flex';
+});
+
+document.getElementById('btn-print-fleet').addEventListener('click', () => {
+  if(currentFleet.length === 0) {
+    alert("Your fleet is empty.");
+    return;
+  }
+  
+  const container = document.createElement('div');
+  container.id = 'fleet-print-container';
+  
+  const activeLayout = getCurrentLayoutData();
+  let html = '';
+  
+  currentFleet.forEach(fItem => {
+    const ship = shipLibrary.find(s => s.name === fItem.shipName);
+    if (ship) {
+      loadShipToWorkspace(ship.layout);
+      const pageHTML = `<div class="fleet-page">${workspace.innerHTML}</div>`;
+      html += pageHTML;
+    }
+  });
+  
+  loadShipToWorkspace(activeLayout);
+  
+  container.innerHTML = html;
+  document.body.appendChild(container);
+  
+  document.documentElement.classList.add('print-fleet-mode');
+  document.body.classList.add('print-fleet-mode');
+  
+  setTimeout(() => {
+    window.print();
+    document.body.removeChild(container);
+    document.documentElement.classList.remove('print-fleet-mode');
+    document.body.classList.remove('print-fleet-mode');
+  }, 500); 
 });
