@@ -8,7 +8,6 @@ let activeFleetShipId = null;
 
 
 const STATE_KEY = 'corvet_state_v2';
-let activeShipId = null;
 let storageRecoveryRequired = false;
 let autosaveRecoveryRequired = false;
 const storedRecoveryData = {};
@@ -88,11 +87,28 @@ function shipSignature(ship) {
   return JSON.stringify([ship.name, ship.layout]);
 }
 
-function legacyShipId(ship) {
-  // Deterministic migration lets repeated imports of old exports find the same ship.
-  let hash = 2166136261;
-  for (const c of shipSignature(ship)) hash = Math.imul(hash ^ c.charCodeAt(0), 16777619);
-  return 'legacy_' + (hash >>> 0).toString(16);
+function shipDesignSignature(ship) {
+  return JSON.stringify(ship.layout.map(item => item.isUI && item.id === 'header' ? {...item, customText:null} : item));
+}
+
+function isNumberedCopy(name, base) {
+  if (!name.startsWith(base + ' (') || !name.endsWith(')')) return false;
+  return /^\d+$/.test(name.slice(base.length + 2, -1));
+}
+
+function uniqueShipName(name, library) {
+  if (!library.some(s => s.name === name)) return name;
+  let number = 2;
+  while (library.some(s => s.name === `${name} (${number})`)) number++;
+  return `${name} (${number})`;
+}
+
+function setShipName(ship, name) {
+  ship.name = name;
+  ship.id = name;
+  const header = ship.layout.find(item => item.isUI && item.id === 'header');
+  if (header) header.customText = name;
+  return ship;
 }
 
 function normalizeLibrary(value, database = roomDatabase) {
@@ -101,11 +117,11 @@ function normalizeLibrary(value, database = roomDatabase) {
   for (const ship of value) {
     requireData(ship && typeof ship.name === 'string' && ship.name.length <= 500, 'Each ship needs a name.');
     const out = {name:ship.name, layout:normalizeLayout(ship.layout, database)};
-    if (ship.id !== undefined) requireData(validId(ship.id), 'Invalid ship ID.');
-    out.id = ship.id || legacyShipId(out);
-    const existing = result.find(s => s.id === out.id);
+    if (ship.id !== undefined) requireData(typeof ship.id === 'string' && ship.id.length <= 500, 'Invalid ship ID.');
+    if (ship.id && ship.id !== ship.name) Object.defineProperty(out, '_previousId', {value:ship.id});
+    const existing = result.find(s => s.name === out.name);
     if (existing && shipSignature(existing) === shipSignature(out)) continue;
-    if (existing) out.id = newId();
+    setShipName(out, uniqueShipName(out.name, result));
     result.push(out);
   }
   return result;
@@ -115,12 +131,12 @@ function normalizeFleet(value, library = shipLibrary) {
   requireData(Array.isArray(value), 'Fleet must be a list.');
   const ids = new Set();
   return value.map(f => {
-    requireData(f && (validId(f.shipId) || typeof f.shipName === 'string'), 'Invalid fleet entry.');
-    const ship = f.shipId ? library.find(s => s.id === f.shipId) : library.find(s => s.name === f.shipName);
+    requireData(f && (typeof f.shipId === 'string' || typeof f.shipName === 'string'), 'Invalid fleet entry.');
+    const ship = library.find(s => s.id === f.shipId || s._previousId === f.shipId || s.name === f.shipName);
     let id = f.id == null ? newId('fleet') : String(f.id);
     if (ids.has(id)) id = newId('fleet');
     ids.add(id);
-    return {id, shipId:f.shipId || ship?.id || null, shipName:ship?.name || f.shipName || 'Unknown ship'};
+    return {id, shipId:ship?.name || f.shipName || f.shipId || null, shipName:ship?.name || f.shipName || 'Unknown ship'};
   });
 }
 
@@ -239,7 +255,8 @@ function mergeLibraryData(data) {
   let added = 0;
   for (const ship of incoming) {
     if (merged.some(s => shipSignature(s) === shipSignature(ship))) continue;
-    if (merged.some(s => s.id === ship.id)) ship.id = newId();
+    if (merged.some(s => isNumberedCopy(s.name, ship.name) && shipDesignSignature(s) === shipDesignSignature(ship))) continue;
+    if (merged.some(s => s.name === ship.name)) setShipName(ship, uniqueShipName(ship.name, merged));
     merged.push(ship);
     added++;
   }
@@ -350,7 +367,6 @@ function init() {
       const saved = JSON.parse(autosave);
       const layoutData = normalizeLayout(Array.isArray(saved) ? saved : saved.layout);
       loadShipToWorkspace(layoutData);
-      activeShipId = !Array.isArray(saved) && shipLibrary.some(s => s.id === saved.shipId) ? saved.shipId : null;
     } catch (e) {
       autosaveRecoveryRequired = true;
       setupDefaultWorkspace();
@@ -382,7 +398,6 @@ function updateThemeButton() {
 }
 
 function setupDefaultWorkspace() {
-  activeShipId = null;
   workspace.innerHTML = ''; 
   document.getElementById('ship-name-input').value = 'NEW SHIP';
   document.getElementById('ship-class-input').value = 'CORVETTE';
@@ -401,7 +416,7 @@ function autoSaveWorkspace() {
   if (storageRecoveryRequired || autosaveRecoveryRequired) return;
   const layoutData = getCurrentLayoutData();
   try {
-    localStorage.setItem('corvet_autosave', JSON.stringify({layout:layoutData, shipId:activeShipId}));
+    localStorage.setItem('corvet_autosave', JSON.stringify({layout:layoutData}));
   } catch(e) {
     document.getElementById('warnings-container').textContent = 'Autosave failed. Export or free browser storage before closing this page.';
   }
@@ -1188,16 +1203,12 @@ document.getElementById('btn-save-lib').addEventListener('click', () => {
   const name = document.getElementById('ship-name-input').value.trim() || 'UNTITLED SHIP';
   document.getElementById('ship-name-input').value = name;
   document.getElementById('ship-name-display').textContent = name;
-  let existing = shipLibrary.find(s => s.id === activeShipId);
-  if (!existing) {
-    const matches = shipLibrary.filter(s => s.name === name);
-    if (matches.length === 1 && confirm(`Overwrite existing ship "${name}"? Cancel to save a separate ship.`)) existing = matches[0];
-  } else if (!confirm(`Update saved ship "${existing.name}"?`)) return;
-  const ship = {id:existing?.id || newId(), name, layout:getCurrentLayoutData()};
-  const next = existing ? shipLibrary.map(s => s.id === existing.id ? ship : s) : [...shipLibrary, ship];
+  const existing = shipLibrary.find(s => s.name === name);
+  if (existing && !confirm(`Overwrite existing ship "${name}" in library?`)) return;
+  const ship = {id:name, name, layout:getCurrentLayoutData()};
+  const next = existing ? shipLibrary.map(s => s.name === name ? ship : s) : [...shipLibrary, ship];
   if (!persistState(next)) return;
   shipLibrary = next;
-  activeShipId = ship.id;
   autoSaveWorkspace();
   updateFleetDropdown();
   renderFleetSidebar();
@@ -1229,7 +1240,6 @@ document.getElementById('btn-wipe').addEventListener('click', () => {
   if (confirm("Are you sure you want to permanently delete all ships in your library? Make sure you have exported a backup first.")) {
     if (!persistState([])) return;
     shipLibrary = [];
-    activeShipId = null;
     updateFleetDropdown();
     renderFleetSidebar();
     alert("Library wiped.");
@@ -1266,7 +1276,6 @@ document.getElementById('btn-open-lib').addEventListener('click', () => {
       btnLoad.onclick = () => {
         if(confirm(`Load "${ship.name}"? Current unsaved board changes will be lost.`)) {
           loadShipToWorkspace(ship.layout);
-          activeShipId = ship.id;
           autoSaveWorkspace(); 
           modal.style.display = 'none';
         }
@@ -1277,10 +1286,9 @@ document.getElementById('btn-open-lib').addEventListener('click', () => {
       btnDelete.textContent = 'Delete';
       btnDelete.onclick = () => {
         if(confirm(`Delete "${ship.name}" from library?`)) {
-          const next = shipLibrary.filter(s => s.id !== ship.id);
+          const next = shipLibrary.filter(s => s.name !== ship.name);
           if (!persistState(next)) return;
           shipLibrary = next;
-          if (activeShipId === ship.id) activeShipId = null;
           updateFleetDropdown();
           renderFleetSidebar();
           document.getElementById('btn-open-lib').click(); 
