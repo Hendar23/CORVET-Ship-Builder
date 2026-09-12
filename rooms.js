@@ -59,8 +59,8 @@ const hullDatabase = [
 
 const shieldDatabase = [
     { id: "shield_light", name: "Light Shields", hp: 2, cost: 10 },
-    { id: "shield_medium", name: "Medium Shields", hp: 3, cost: 35 },
-    { id: "shield_heavy", name: "Heavy Shields", hp: 4, cost: 55 }
+    { id: "shield_medium", name: "Medium Shields", hp: 3, cost: 30 },
+    { id: "shield_heavy", name: "Heavy Shields", hp: 4, cost: 50 }
 ];
 
 const roomDatabase = [
@@ -161,10 +161,10 @@ const roomDatabase = [
     },
     {
         id: "reactor",
-        name: "Reactor",
+        name: "Standard Reactor",
         type: "core",
         core_category: "reactor",
-        cost: 30,
+        cost: 35,
         width: 130,
         height: 180,
         max_connections: 3,
@@ -177,7 +177,7 @@ const roomDatabase = [
         name: "Heavy Reactor",
         type: "core",
         core_category: "reactor",
-        cost: 55,
+        cost: 60,
         width: 130,
         height: 180,
         max_connections: 3,
@@ -289,7 +289,7 @@ const roomDatabase = [
         id: "tractor_beam",
         name: "Tractor Beam",
         type: "auxiliary",
-        cost: 25,
+        cost: 15,
         width: 130,
         height: 180,
         max_connections: 3,
@@ -336,8 +336,8 @@ const roomDatabase = [
     },
     {
         id: "hacking_device",
-        name: "Hacking Device",
-        type: "weapon",
+        name: "Effector",
+        type: "auxiliary",
         cost: 20,
         width: 130,
         height: 180,
