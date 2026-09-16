@@ -12,27 +12,27 @@ const crewPerks = [
     {
         id: "pilot",
         name: "Pilot",
-        cost: 35
+        cost: 25
     },
     {
         id: "gunner",
         name: "Gunner",
-        cost: 25
+        cost: 20
     },
     {
         id: "engineer",
         name: "Engineer",
-        cost: 25
+        cost: 20
     },
     {
         id: "soldier",
         name: "Soldier",
-        cost: 25
+        cost: 20
     },
     {
         id: "runner",
         name: "Runner",
-        cost: 25
+        cost: 20
     }
 ];
 
@@ -253,7 +253,7 @@ const roomDatabase = [
         id: "shield_generator",
         name: "Shield Generator",
         type: "auxiliary",
-        cost: 20,
+        cost: 30,
         width: 130,
         height: 180,
         max_connections: 3,
@@ -289,7 +289,7 @@ const roomDatabase = [
         id: "tractor_beam",
         name: "Tractor Beam",
         type: "auxiliary",
-        cost: 15,
+        cost: 10,
         width: 130,
         height: 180,
         max_connections: 3,

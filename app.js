@@ -355,6 +355,11 @@ function updatePoints() {
 }
 
 function init() {
+  if (typeof location.search === 'string' && location.search === '?board-service') {
+    populateDropdown();
+    setupDefaultWorkspace();
+    return;
+  }
   loadStoredState();
   populateDropdown();
   updateFleetDropdown();
