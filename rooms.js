@@ -6,7 +6,7 @@ const crewConfig = {
 const crewPerks = [
     {
         id: "none",
-        name: "No Perk",
+        name: "No Specialisation",
         cost: 0
     },
     {
