@@ -418,7 +418,7 @@ const roomDatabase = [
         width: 130,
         height: 180,
         max_connections: 3,
-        max_hp: 3,
+        max_hp: 2,
         is_mannable: false,
         ammo: 6
     }
