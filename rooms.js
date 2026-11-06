@@ -33,6 +33,11 @@ const crewPerks = [
         id: "runner",
         name: "Runner",
         cost: 20
+    },
+    {
+        id: "sniper",
+        name: "Sniper",
+        cost: 20
     }
 ];
 
